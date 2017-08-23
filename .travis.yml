@@ -1,0 +1,21 @@
+language: scala
+scala:
+- 2.11.8
+sudo: false
+script: $TRAVIS_BUILD_DIR/travis/build.sh
+jdk:
+- oraclejdk8
+cache:
+  directories:
+  - $HOME/.m2
+  - $HOME/.ivy2
+  - $HOME/.sbt
+git:
+  submodules: false
+before_install:
+- sed -i 's/git@github.com:/https:\/\/github.com\//' .gitmodules
+- git submodule update --init
+- sed -i 's/git@github.com:/https:\/\/github.com\//' api/auth-basic-service-api/.gitmodules
+- git submodule update --init --recursive
+env:
+  global:
