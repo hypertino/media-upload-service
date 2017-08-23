@@ -1,3 +1,6 @@
+# project specific
+/src/test/resources/application.conf
+
 *.class
 *.log
 *.idea
