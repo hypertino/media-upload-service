@@ -167,7 +167,7 @@ class FileUploadHandler(client: ActorRef,
           import com.hypertino.binders.json.JsonBinders._
           // todo: + Location header!
           client ! HttpResponse(status = StatusCodes.Created,
-            HttpEntity(`application/json`, w.mediaIdMap.toJson)
+            HttpEntity(`application/json`, "{\"media_ids\":" + w.mediaIdMap.toJson + "}")
           )
           client ! CommandWrapper(SetRequestTimeout(2.seconds)) // reset timeout
           context.stop(self)
