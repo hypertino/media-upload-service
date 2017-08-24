@@ -35,13 +35,13 @@ case class Scheme(regex: String, transformations: Seq[Transformation], bucket: O
   def matches(uri: String): Boolean = regexPattern.findFirstMatchIn(uri).isDefined
 }
 
-case class Rewrite(regex: String, target: String) {
-  private lazy val regexPattern = Pattern.compile(regex)
+case class Rewrite(from: String, to: String) {
+  private lazy val regexPattern = Pattern.compile(from)
   def rewrite(uri: String): Option[String] = {
 
     val matcher = regexPattern.matcher(uri)
     if (matcher.matches()) {
-      Some(matcher.replaceAll(target))
+      Some(matcher.replaceAll(to))
     } else {
       None
     }
