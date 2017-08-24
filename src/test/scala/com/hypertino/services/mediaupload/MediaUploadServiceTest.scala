@@ -36,7 +36,7 @@ object MediaUploadServiceTest extends Module  {
         Task.eval(Ok(EmptyBody))
 
       case None ⇒
-        Task.eval(NotFound(ErrorBody("not-found")))
+        Task.raiseError(NotFound(ErrorBody("not-found")))
     }
   }
 
@@ -45,14 +45,14 @@ object MediaUploadServiceTest extends Module  {
       Task.eval(Ok(EmptyBody))
     }
     else {
-      Task.eval(NotFound(ErrorBody("not-found")))
+      Task.raiseError(NotFound(ErrorBody("not-found")))
     }
   }
 
   def onContentGet(implicit request: ContentGet): Task[ResponseBase] = {
     hyperStorageContent.get(request.path) match {
       case Some(v) ⇒ Task.eval(Ok(DynamicBody(v)))
-      case None ⇒ Task.eval(NotFound(ErrorBody("not-found", Some(request.path))))
+      case None ⇒ Task.raiseError(NotFound(ErrorBody("not-found", Some(request.path))))
     }
   }
 
@@ -63,6 +63,7 @@ object MediaUploadServiceTest extends Module  {
     Thread.sleep(500)
     val mediaUploadService = new MediaUploadService()
     val minioKafkaToHyperbusService = new MinioKafkaToHyperbusService()
+    val mediaUploadProxyService = new MediaUploadProxyService()
     Console.readLine()
   }
 }

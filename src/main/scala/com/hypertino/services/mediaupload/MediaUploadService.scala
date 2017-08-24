@@ -8,7 +8,7 @@ import java.util.regex.Pattern
 
 import com.hypertino.binders.value.{Null, Obj, Text, Value}
 import com.hypertino.hyperbus.Hyperbus
-import com.hypertino.hyperbus.model.{Accepted, Conflict, Created, DynamicBody, ErrorBody, NotFound, Ok, Response}
+import com.hypertino.hyperbus.model.{Accepted, Body, Conflict, Created, DynamicBody, ErrorBody, NotFound, Ok, Response}
 import com.hypertino.hyperbus.util.SeqGenerator
 import com.hypertino.mediaupload.api.{Media, MediaFileGet, MediaFilesPost, MediaStatus}
 import com.hypertino.mediaupload.apiref.hyperstorage.{ContentGet, ContentPatch, ContentPut}
@@ -25,6 +25,7 @@ import scaldi.{Injectable, Injector}
 
 import scala.concurrent.Future
 import scala.concurrent.duration.FiniteDuration
+import scala.util.Success
 import scala.util.control.NonFatal
 import scala.util.matching.Regex
 
@@ -94,15 +95,15 @@ class MediaUploadService(implicit val injector: Injector) extends Service with I
     hyperbus
       .ask(ContentGet(path))
       .flatMap {
-        case Ok(mediaValueBody,_) ⇒
-        import com.hypertino.binders.value._
-        val media = mediaValueBody.content.to[Media]
-        media.status match {
-          case MediaStatus.PROGRESS | MediaStatus.SCHEDULED ⇒ Task.now(Accepted(rewriteMedia(media)))
-          case MediaStatus.NORMAL ⇒ Task.now(Ok(rewriteMedia(media)))
-          case MediaStatus.FAILED ⇒ Task.raiseError(Conflict(ErrorBody("transform-failed", Some(s"Transformation of ${media.originalUrl} failed"))))
-          case MediaStatus.DELETED ⇒ Task.raiseError(NotFound(ErrorBody("media-not-found", Some(s"${get.mediaId} is not found"))))
-        }
+        case Ok(mediaValueBody, _) ⇒
+          import com.hypertino.binders.value._
+          val media = mediaValueBody.content.to[Media]
+          media.status match {
+            case MediaStatus.PROGRESS | MediaStatus.SCHEDULED ⇒ Task.now(Accepted(rewriteMedia(media)))
+            case MediaStatus.NORMAL ⇒ Task.now(Ok(rewriteMedia(media)))
+            case MediaStatus.FAILED ⇒ Task.raiseError(Conflict(ErrorBody("transform-failed", Some(s"Transformation of ${media.originalUrl} failed"))))
+            case MediaStatus.DELETED ⇒ Task.raiseError(NotFound(ErrorBody("media-not-found", Some(s"${get.mediaId} is not found"))))
+          }
       }
   }
 
