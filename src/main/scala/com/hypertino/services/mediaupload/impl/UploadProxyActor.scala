@@ -84,7 +84,7 @@ import parser.HttpParser
 import HttpHeaders.RawHeader
 import spray.io.CommandWrapper
 
-case class WatchMedia(mediaIds: Seq[String], ttl: Long)
+case class WatchMedia(mediaIdMap: Map[String,String], ttl: Long)
 
 class FileUploadHandler(client: ActorRef,
                         start: ChunkedRequestStart,
@@ -138,7 +138,7 @@ class FileUploadHandler(client: ActorRef,
       import com.hypertino.hyperbus.model.MessagingContext.Implicits.emptyContext
       import monix.execution.Scheduler.Implicits.global // todo: inject/config
       Task.gather {
-        w.mediaIds.map { mediaId ⇒
+        w.mediaIdMap.map { case (name, mediaId) ⇒
           hyperbus
             .ask(MediaFileGet(mediaId))
             .timeout(processingTimeout)
@@ -164,10 +164,10 @@ class FileUploadHandler(client: ActorRef,
           }
 
         if (processed) {
-          val mediaIdsStr = w.mediaIds.map(s ⇒ "\"" + s + "\"").mkString("{\"media_ids\":[", ",", "]}")
+          import com.hypertino.binders.json.JsonBinders._
           // todo: + Location header!
           client ! HttpResponse(status = StatusCodes.Created,
-            HttpEntity(`application/json`, mediaIdsStr)
+            HttpEntity(`application/json`, w.mediaIdMap.toJson)
           )
           client ! CommandWrapper(SetRequestTimeout(2.seconds)) // reset timeout
           context.stop(self)
@@ -178,8 +178,8 @@ class FileUploadHandler(client: ActorRef,
           }
           else {
             import com.hypertino.binders.value._
-            val error = ErrorBody("processing-timeout", Some("Timed-out while waiting for the processing"), extra = w.mediaIds.toValue)
-            log.error(s"Didn't get processing result for ${w.mediaIds} #${error.errorId}")
+            val error = ErrorBody("processing-timeout", Some("Timed-out while waiting for the processing"), extra = w.mediaIdMap.toValue)
+            log.error(s"Didn't get processing result for ${w.mediaIdMap} #${error.errorId}")
             client ! HttpResponse(status = StatusCodes.GatewayTimeout,
               HttpEntity(`application/json`, error.serializeToString)
             )
@@ -192,11 +192,14 @@ class FileUploadHandler(client: ActorRef,
 
   import collection.JavaConverters._
 
-  def fileNameForPart(part: MIMEPart): Option[String] =
+  def fileNameForPart(part: MIMEPart): Option[String] = paramForPart(part, "filename")
+  def nameForPart(part: MIMEPart): Option[String] = paramForPart(part, "name")
+
+  def paramForPart(part: MIMEPart, param: String): Option[String] =
     for {
       dispHeader <- part.getHeader("Content-Disposition").asScala.lift(0)
       Right(disp: `Content-Disposition`) = HttpParser.parseHeader(RawHeader("Content-Disposition", dispHeader))
-      name <- disp.parameters.get("filename")
+      name <- disp.parameters.get(param)
     } yield name
 
   def uploadToS3(uri: Uri, file: File): Unit = {
@@ -211,16 +214,19 @@ class FileUploadHandler(client: ActorRef,
       val message = new MIMEMessage(new FileInputStream(tmpFile), boundary)
       // caution: the next line will read the complete file regardless of its size
       val parts = message.getAttachments.asScala
-      val mediaIds = parts.map { part =>
+      val mediaIdMap = parts.zipWithIndex.map { case (part, index) =>
         val contentType = part.getContentType
+        part.getContentId
         val fileName = IdGenerator.create() + fileNameForPart(part).map(extension).getOrElse("")
+        val name = nameForPart(part).getOrElse(index.toString)
         val fullFileName = if (folder.isEmpty) fileName else folder + "/" + fileName
         val mediaId = Hasher("/" + bucketName + "/" + fullFileName).sha1.hex
         minioClient.putObject(bucketName, fullFileName, part.read(), contentType)
-        mediaId
-      }
 
-      val w = WatchMedia(mediaIds, System.currentTimeMillis() + processingTimeout.toMillis)
+        name → mediaId
+      } toMap
+
+      val w = WatchMedia(mediaIdMap, System.currentTimeMillis() + processingTimeout.toMillis)
       import context.dispatcher
       context.system.scheduler.scheduleOnce(checkProcessingEach, self, w)
     }
