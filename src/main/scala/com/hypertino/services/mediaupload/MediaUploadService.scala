@@ -30,18 +30,18 @@ import scala.util.matching.Regex
 
 case class Transformation(width: Option[Int], height: Option[Int], compression: Option[Int])
 
-case class Scheme(regexp: String, transformations: Seq[Transformation], bucket: Option[String]) {
-  private lazy val regexpPattern = new Regex(regexp)
-  def matches(uri: String): Boolean = regexpPattern.findFirstMatchIn(uri).isDefined
+case class Scheme(regex: String, transformations: Seq[Transformation], bucket: Option[String]) {
+  private lazy val regexPattern = new Regex(regex)
+  def matches(uri: String): Boolean = regexPattern.findFirstMatchIn(uri).isDefined
 }
 
-case class Rewrite(sourceRegexp: String, targetPattern: String) {
-  private lazy val sourceRegexpPattern = Pattern.compile(sourceRegexp)
+case class Rewrite(regex: String, target: String) {
+  private lazy val regexPattern = Pattern.compile(regex)
   def rewrite(uri: String): Option[String] = {
 
-    val matcher = sourceRegexpPattern.matcher(uri)
+    val matcher = regexPattern.matcher(uri)
     if (matcher.matches()) {
-      Some(matcher.replaceAll(targetPattern))
+      Some(matcher.replaceAll(target))
     } else {
       None
     }
