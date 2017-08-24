@@ -65,7 +65,7 @@ class MediaUploadService(implicit val injector: Injector) extends Service with I
 
   def onMediaFilesPost(implicit post: MediaFilesPost): Task[Created[Media]] = {
     import com.hypertino.binders.value._
-    val mediaId = Hasher(new URI(post.body.fileUri).getPath).sha256.hex
+    val mediaId = Hasher(new URI(post.body.fileUri).getPath).sha1.hex
     val media = Media(mediaId, post.body.fileUri, Seq.empty, MediaStatus.PROGRESS)
     val path = hyperStorageMediaPath(mediaId)
 
