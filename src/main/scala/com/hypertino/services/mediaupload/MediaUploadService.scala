@@ -65,8 +65,8 @@ class MediaUploadService(implicit val injector: Injector) extends Service with I
 
   def onMediaFilesPost(implicit post: MediaFilesPost): Task[Created[Media]] = {
     import com.hypertino.binders.value._
-    val mediaId = Hasher(new URI(post.body.fileUri).getPath).sha1.hex
-    val media = Media(mediaId, post.body.fileUri, Seq.empty, MediaStatus.PROGRESS)
+    val mediaId = Hasher(new URI(post.body.originalUrl).getPath).sha1.hex
+    val media = Media(mediaId, post.body.originalUrl, Seq.empty, MediaStatus.PROGRESS)
     val path = hyperStorageMediaPath(mediaId)
 
     hyperbus
@@ -100,7 +100,7 @@ class MediaUploadService(implicit val injector: Injector) extends Service with I
         media.status match {
           case MediaStatus.PROGRESS | MediaStatus.SCHEDULED ⇒ Task.now(Accepted(rewriteMedia(media)))
           case MediaStatus.NORMAL ⇒ Task.now(Ok(rewriteMedia(media)))
-          case MediaStatus.FAILED ⇒ Task.raiseError(Conflict(ErrorBody("transform-failed", Some(s"Transformation of ${media.fileUri} failed"))))
+          case MediaStatus.FAILED ⇒ Task.raiseError(Conflict(ErrorBody("transform-failed", Some(s"Transformation of ${media.originalUrl} failed"))))
           case MediaStatus.DELETED ⇒ Task.raiseError(NotFound(ErrorBody("media-not-found", Some(s"${get.mediaId} is not found"))))
         }
       }
@@ -108,10 +108,10 @@ class MediaUploadService(implicit val injector: Injector) extends Service with I
 
   protected def transform(media: Media): Task[Value] = Task.eval {
     scala.concurrent.blocking {
-      config.schemes.find(_.matches(media.fileUri)).map { scheme ⇒
-        log.info(s"Transforming ${media.fileUri} according to $scheme")
+      config.schemes.find(_.matches(media.originalUrl)).map { scheme ⇒
+        log.info(s"Transforming ${media.originalUrl} according to $scheme")
         val tempDir = appendSeparator(System.getProperty("java.io.tmpdir"))
-        val originalUrl = rewrite(media.fileUri)
+        val originalUrl = rewrite(media.originalUrl)
         val url = new URL(originalUrl)
         val originalTempFileName = tempDir + SeqGenerator.create() + extension(url.getFile)
         val tempFileName = tempDir + SeqGenerator.create() + extension(url.getFile)
@@ -119,11 +119,11 @@ class MediaUploadService(implicit val injector: Injector) extends Service with I
           throw new IllegalArgumentException("Bucket name isn't configured")
         ))
 
-        val fileName = getFileName(media.fileUri)
+        val fileName = getFileName(media.originalUrl)
         import resource._
 
-        if (media.fileUri.startsWith(config.s3.endpoint)) {
-          val (originalBucketName,originalFileName) = getOriginalBucketAndFileName(media.fileUri)
+        if (media.originalUrl.startsWith(config.s3.endpoint)) {
+          val (originalBucketName,originalFileName) = getOriginalBucketAndFileName(media.originalUrl)
           minioClient.getObject(originalBucketName,originalFileName, originalTempFileName)
         }
         else {
@@ -140,7 +140,7 @@ class MediaUploadService(implicit val injector: Injector) extends Service with I
         val originalImage = Image.fromPath(originalPath)
 
         val versions = scheme.transformations.map { transformation ⇒
-          implicit val imageWriter = if (media.fileUri.endsWith(".png")) {
+          implicit val imageWriter = if (media.originalUrl.endsWith(".png")) {
             PngWriter()
           }
           else {
@@ -166,7 +166,7 @@ class MediaUploadService(implicit val injector: Injector) extends Service with I
         }
         Obj(versions.toMap)
       } getOrElse {
-        log.info(s"Nothing to do with ${media.fileUri}")
+        log.info(s"Nothing to do with ${media.originalUrl}")
         Null
       }
     }
@@ -195,11 +195,11 @@ class MediaUploadService(implicit val injector: Injector) extends Service with I
     }
   }
 
-  protected def getFileName(fileUri: String): String = {
-    val uri = new URI(fileUri)
+  protected def getFileName(url: String): String = {
+    val uri = new URI(url)
     val path = uri.getPath
     val segments = path.split('/').filter(_.nonEmpty)
-    if (fileUri.startsWith(config.s3.endpoint) && segments.tail.nonEmpty) {
+    if (url.startsWith(config.s3.endpoint) && segments.tail.nonEmpty) {
       segments.tail.mkString("/")
     }
     else {
@@ -207,12 +207,12 @@ class MediaUploadService(implicit val injector: Injector) extends Service with I
     }
   }
 
-  protected def getOriginalBucketAndFileName(fileUri: String): (String,String) = {
-    val uri = new URI(fileUri)
+  protected def getOriginalBucketAndFileName(originalUrl: String): (String,String) = {
+    val uri = new URI(originalUrl)
     val path = uri.getPath
     val segments = path.split('/').filter(_.nonEmpty)
     if (segments.tail.isEmpty) {
-      throw new RuntimeException(s"Can't get bucket and filename from $fileUri")
+      throw new RuntimeException(s"Can't get bucket and filename from $originalUrl")
     }
     (segments.head, segments.tail.mkString("/"))
   }
@@ -263,6 +263,7 @@ class MediaUploadService(implicit val injector: Injector) extends Service with I
 
   protected  def rewriteMedia(media: Media): Media = {
     media.copy(
+      originalUrl = rewrite(media.originalUrl),
       versions = media.versions match {
         case Obj(l) ⇒ Obj(l.map(kv ⇒ kv._1 → Text(rewrite(kv._2.toString))))
         case other ⇒ other
