@@ -216,8 +216,9 @@ class FileUploadHandler(client: ActorRef,
       val parts = message.getAttachments.asScala
       val mediaIdMap = parts.zipWithIndex.map { case (part, index) =>
         val contentType = part.getContentType
-        part.getContentId
-        val fileName = IdGenerator.create() + fileNameForPart(part).map(extension).getOrElse("")
+        val id = IdGenerator.create()
+        val subFolders = id.substring(id.length-4, id.length-2) + "/" + id.substring(id.length-2) + "/"
+        val fileName = subFolders + id + fileNameForPart(part).map(extension).getOrElse("")
         val name = nameForPart(part).getOrElse(index.toString)
         val fullFileName = if (folder.isEmpty) fileName else folder + "/" + fileName
         val mediaId = Hasher("/" + bucketName + "/" + fullFileName).sha1.hex
