@@ -3,6 +3,7 @@ package com.hypertino.services.mediaupload
 import com.hypertino.binders.value.Value
 import com.hypertino.hyperbus.Hyperbus
 import com.hypertino.hyperbus.model.{Created, DynamicBody, EmptyBody, ErrorBody, MessagingContext, NoContent, NotFound, Ok, ResponseBase}
+import com.hypertino.hyperbus.subscribe.Subscribable
 import com.hypertino.mediaupload.apiref.hyperstorage.{ContentDelete, ContentGet, ContentPatch, ContentPut}
 import com.hypertino.service.config.ConfigLoader
 import com.typesafe.config.Config
@@ -12,7 +13,7 @@ import scaldi.Module
 
 import scala.collection.mutable
 
-object MediaUploadServiceTest extends Module  {
+object MediaUploadServiceTest extends Module  with Subscribable {
   private implicit val scheduler = monix.execution.Scheduler.Implicits.global
   private implicit val mcx = MessagingContext.empty
   bind [Config] to ConfigLoader()

@@ -9,6 +9,7 @@ import java.util.regex.Pattern
 import com.hypertino.binders.value.{Null, Obj, Text, Value}
 import com.hypertino.hyperbus.Hyperbus
 import com.hypertino.hyperbus.model.{Accepted, Body, Conflict, Created, DynamicBody, ErrorBody, NotFound, Ok, Response}
+import com.hypertino.hyperbus.subscribe.Subscribable
 import com.hypertino.hyperbus.util.SeqGenerator
 import com.hypertino.mediaupload.api.{Media, MediaFileGet, MediaFilesPost, MediaStatus}
 import com.hypertino.mediaupload.apiref.hyperstorage.{ContentGet, ContentPatch, ContentPut}
@@ -53,7 +54,7 @@ case class S3Config(endpoint: String, accessKey: String, secretKey: String, buck
 
 case class MediaUploadServiceConfiguration(s3: S3Config, rewrites: Seq[Rewrite], schemes: Seq[Scheme])
 
-class MediaUploadService(implicit val injector: Injector) extends Service with Injectable {
+class MediaUploadService(implicit val injector: Injector) extends Service with Injectable with Subscribable {
   protected val log = LoggerFactory.getLogger(getClass)
   protected implicit val scheduler = inject[Scheduler]
   protected val hyperbus = inject[Hyperbus]
