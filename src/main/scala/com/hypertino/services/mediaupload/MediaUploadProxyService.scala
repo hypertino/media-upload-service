@@ -40,7 +40,7 @@ class MediaUploadProxyService(implicit val injector: Injector) extends Service w
 
   log.info("MediaUploadProxyService started")
 
-  override def stopService(controlBreak: Boolean, timeout: FiniteDuration): Future[Unit] = Future {
+  override def stopService(controlBreak: Boolean, timeout: FiniteDuration): Future[Unit] = actorSystem.terminate().map { _ ⇒
     log.info("MediaUploadProxyService stopped")
   }
 }
