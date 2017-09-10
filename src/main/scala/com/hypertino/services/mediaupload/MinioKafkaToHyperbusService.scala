@@ -38,9 +38,7 @@ class MinioKafkaToHyperbusService(implicit val injector: Injector) extends Servi
   logger.info(s"${getClass.getName} started")
 
   protected val subscription = observable.subscribe(record ⇒ {
-    if (logger.isDebugEnabled()) {
-      logger.debug(s"Incoming event: ${record.key()} -> ${record.value()}")
-    }
+    logger.debug(s"Incoming event: ${record.key()} -> ${record.value()}")
     try {
       import com.hypertino.hyperbus.model.MessagingContext.Implicits.emptyContext
       import com.hypertino.binders.json.JsonBinders._

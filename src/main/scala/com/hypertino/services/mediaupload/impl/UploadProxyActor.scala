@@ -150,9 +150,7 @@ class FileUploadHandler(client: ActorRef,
             results.forall {
               case (_, Success(Ok(m: Media, _))) if m.status == MediaStatus.NORMAL ⇒ true
               case (mediaId, other) ⇒ {
-                if (log.isDebugEnabled) {
-                  log.debug(s"Still waiting for media $mediaId, status: $other")
-                }
+                log.debug(s"Still waiting for media $mediaId, status: $other")
                 false
               }
             }
