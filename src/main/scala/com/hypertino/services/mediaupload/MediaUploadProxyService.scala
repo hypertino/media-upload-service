@@ -10,6 +10,7 @@ import com.hypertino.hyperbus.util.SeqGenerator
 import com.hypertino.service.control.api.Service
 import com.hypertino.services.mediaupload.impl.UploadProxyActor
 import com.typesafe.config.Config
+import com.typesafe.scalalogging.StrictLogging
 import io.minio.MinioClient
 import monix.execution.Scheduler
 import org.slf4j.LoggerFactory
@@ -18,6 +19,7 @@ import spray.can.Http
 import spray.http._
 import spray.http.MediaTypes._
 import spray.routing._
+
 import scala.concurrent.duration._
 import scala.concurrent.Future
 
@@ -25,8 +27,7 @@ case class MediaUploadProxyServiceConfiguration(s3: S3Config, port: Int,
                                                 interface: String = "::0",
                                                 processingTimeout: FiniteDuration = 1.minute)
 
-class MediaUploadProxyService(implicit val injector: Injector) extends Service with Injectable {
-  protected val log = LoggerFactory.getLogger(getClass)
+class MediaUploadProxyService(implicit val injector: Injector) extends Service with Injectable with StrictLogging {
   protected implicit val scheduler = inject[Scheduler]
   protected val hyperbus = inject[Hyperbus]
   protected implicit val actorSystem = ActorSystem()
@@ -38,9 +39,9 @@ class MediaUploadProxyService(implicit val injector: Injector) extends Service w
   protected val proxyHttpHandler = actorSystem.actorOf(Props(new UploadProxyActor(hyperbus,minioClient, config.processingTimeout)), name = "proxy-handler" + SeqGenerator.create())
   IO(Http) ! Http.Bind(proxyHttpHandler, interface = config.interface, port = config.port)
 
-  log.info("MediaUploadProxyService started")
+  logger.info(s"${getClass.getName} started")
 
   override def stopService(controlBreak: Boolean, timeout: FiniteDuration): Future[Unit] = actorSystem.terminate().map { _ ⇒
-    log.info("MediaUploadProxyService stopped")
+    logger.info(s"${getClass.getName} stopped")
   }
 }

@@ -1,16 +1,14 @@
 package com.hypertino.services.mediaupload
 
-import com.hypertino.binders.annotations.fieldName
-import com.hypertino.binders.value.Value
 import com.hypertino.hyperbus.Hyperbus
 import com.hypertino.mediaupload.api._
 import com.hypertino.service.control.api.Service
 import com.typesafe.config.Config
+import com.typesafe.scalalogging.StrictLogging
 import monix.execution.Ack.Continue
 import monix.execution.Scheduler
 import monix.kafka.config.AutoOffsetReset
 import monix.kafka.{KafkaConsumerConfig, KafkaConsumerObservable}
-import org.slf4j.LoggerFactory
 import scaldi.{Injectable, Injector}
 
 import scala.concurrent.Future
@@ -24,8 +22,7 @@ case class MinioEvent(
                      Key: String
                      )
 
-class MinioKafkaToHyperbusService(implicit val injector: Injector) extends Service with Injectable {
-  protected val log = LoggerFactory.getLogger(getClass)
+class MinioKafkaToHyperbusService(implicit val injector: Injector) extends Service with Injectable with StrictLogging {
   protected implicit val scheduler = inject[Scheduler]
   protected val hyperbus = inject[Hyperbus]
   import com.hypertino.binders.config.ConfigBinders._
@@ -38,11 +35,11 @@ class MinioKafkaToHyperbusService(implicit val injector: Injector) extends Servi
   )
   protected val observable = KafkaConsumerObservable[String,String](consumerCfg, List(config.topic))
 
-  log.info("MinioKafkaToHyperbusService started")
+  logger.info(s"${getClass.getName} started")
 
   protected val subscription = observable.subscribe(record ⇒ {
-    if (log.isDebugEnabled()) {
-      log.debug(s"Incoming event: ${record.key()} -> ${record.value()}")
+    if (logger.isDebugEnabled()) {
+      logger.debug(s"Incoming event: ${record.key()} -> ${record.value()}")
     }
     try {
       import com.hypertino.hyperbus.model.MessagingContext.Implicits.emptyContext
@@ -54,7 +51,7 @@ class MinioKafkaToHyperbusService(implicit val injector: Injector) extends Servi
           .ask(MediaFilesPost(CreateMediaVersions(uri)))
           .onErrorRecover {
             case NonFatal(e) ⇒
-              log.error(s"Can't create versions for: ${record.key()} -> ${record.value()} / $uri", e)
+              logger.error(s"Can't create versions for: ${record.key()} -> ${record.value()} / $uri", e)
               Unit
           }
           .runAsync
@@ -63,19 +60,19 @@ class MinioKafkaToHyperbusService(implicit val injector: Injector) extends Servi
           }
       }
       else {
-        log.debug(s"Skipped event: ${record.key()} -> ${record.value()}")
+        logger.debug(s"Skipped event: ${record.key()} -> ${record.value()}")
         Continue
       }
     }
     catch {
       case NonFatal(e) ⇒
-        log.error(s"Can't handle event: ${record.key()} -> ${record.value()}", e)
+        logger.error(s"Can't handle event: ${record.key()} -> ${record.value()}", e)
         Continue
     }
   })
 
   override def stopService(controlBreak: Boolean, timeout: FiniteDuration): Future[Unit] = Future {
     subscription.cancel()
-    log.info("MinioKafkaToHyperbusService stopped")
+    logger.info(s"${getClass.getName} stopped")
   }
 }

@@ -1,9 +1,9 @@
 package com.hypertino.services.mediaupload
 
-import java.io.{File, FileInputStream, FileOutputStream}
+import java.io.{File, FileOutputStream}
 import java.net.{URI, URL}
 import java.nio.channels.Channels
-import java.nio.file.{Files, Paths}
+import java.nio.file.Paths
 import java.util.regex.Pattern
 
 import com.hypertino.binders.value.{Null, Obj, Text, Value}
@@ -18,15 +18,14 @@ import com.roundeights.hasher.Hasher
 import com.sksamuel.scrimage.Image
 import com.sksamuel.scrimage.nio.{JpegWriter, PngWriter}
 import com.typesafe.config.Config
+import com.typesafe.scalalogging.StrictLogging
 import io.minio.MinioClient
 import monix.eval.Task
 import monix.execution.Scheduler
-import org.slf4j.LoggerFactory
 import scaldi.{Injectable, Injector}
 
 import scala.concurrent.Future
 import scala.concurrent.duration.FiniteDuration
-import scala.util.Success
 import scala.util.control.NonFatal
 import scala.util.matching.Regex
 
@@ -54,16 +53,15 @@ case class S3Config(endpoint: String, accessKey: String, secretKey: String, buck
 
 case class MediaUploadServiceConfiguration(s3: S3Config, rewrites: Seq[Rewrite], schemes: Seq[Scheme])
 
-class MediaUploadService(implicit val injector: Injector) extends Service with Injectable with Subscribable {
-  protected val log = LoggerFactory.getLogger(getClass)
+class MediaUploadService(implicit val injector: Injector) extends Service with Injectable with Subscribable with StrictLogging{
   protected implicit val scheduler = inject[Scheduler]
   protected val hyperbus = inject[Hyperbus]
   import com.hypertino.binders.config.ConfigBinders._
   protected val config = inject[Config].read[MediaUploadServiceConfiguration]("media-upload")
-  protected val handlers = hyperbus.subscribe(this, log)
+  protected val handlers = hyperbus.subscribe(this, logger)
   protected val minioClient = new MinioClient(config.s3.endpoint, config.s3.accessKey, config.s3.secretKey)
 
-  log.info("MediaUploadService started")
+  logger.info(s"${getClass.getName} started")
 
   def onMediaFilesPost(implicit post: MediaFilesPost): Task[Created[Media]] = {
     import com.hypertino.binders.value._
@@ -81,7 +79,7 @@ class MediaUploadService(implicit val injector: Injector) extends Service with I
       }
       .onErrorRecover {
         case NonFatal(e) ⇒
-          log.error(s"Transformation of $media is failed", e)
+          logger.error(s"Transformation of $media is failed", e)
           media.copy(status = MediaStatus.FAILED)
       }
       .flatMap { media2: Media ⇒
@@ -111,7 +109,7 @@ class MediaUploadService(implicit val injector: Injector) extends Service with I
   protected def transform(media: Media): Task[Value] = Task.eval {
     scala.concurrent.blocking {
       config.schemes.find(_.matches(media.originalUrl)).map { scheme ⇒
-        log.info(s"Transforming ${media.originalUrl} according to $scheme")
+        logger.info(s"Transforming ${media.originalUrl} according to $scheme")
         val tempDir = appendSeparator(System.getProperty("java.io.tmpdir"))
         val originalUrl = rewrite(media.originalUrl)
         val url = new URL(originalUrl)
@@ -159,7 +157,7 @@ class MediaUploadService(implicit val injector: Injector) extends Service with I
 
           for {stream ← managed(newImage.stream(imageWriter))
           } {
-            log.info(s"Uploading $versionUri")
+            logger.info(s"Uploading $versionUri")
             minioClient.putObject(bucketName, newFileName, stream, probeContentType(originalUrl))
           }
 
@@ -168,7 +166,7 @@ class MediaUploadService(implicit val injector: Injector) extends Service with I
         }
         Obj(versions.toMap)
       } getOrElse {
-        log.info(s"Nothing to do with ${media.originalUrl}")
+        logger.info(s"Nothing to do with ${media.originalUrl}")
         Null
       }
     }
@@ -277,6 +275,6 @@ class MediaUploadService(implicit val injector: Injector) extends Service with I
 
   override def stopService(controlBreak: Boolean, timeout: FiniteDuration): Future[Unit] = Future {
     handlers.foreach(_.cancel())
-    log.info("MediaUploadService stopped")
+    logger.info(s"${getClass.getName} stopped")
   }
 }
