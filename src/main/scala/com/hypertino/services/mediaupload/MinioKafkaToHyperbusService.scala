@@ -1,3 +1,10 @@
+/*
+ * Copyright (c) 2017 Magomed Abdurakhmanov, Hypertino
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
+ */
+
 package com.hypertino.services.mediaupload
 
 import com.hypertino.hyperbus.Hyperbus
@@ -35,7 +42,7 @@ class MinioKafkaToHyperbusService(implicit val injector: Injector) extends Servi
   )
   protected val observable = KafkaConsumerObservable[String,String](consumerCfg, List(config.topic))
 
-  logger.info(s"${getClass.getName} started")
+  logger.info(s"${getClass.getName} is STARTED")
 
   protected val subscription = observable.subscribe(record ⇒ {
     logger.debug(s"Incoming event: ${record.key()} -> ${record.value()}")
@@ -71,6 +78,6 @@ class MinioKafkaToHyperbusService(implicit val injector: Injector) extends Servi
 
   override def stopService(controlBreak: Boolean, timeout: FiniteDuration): Future[Unit] = Future {
     subscription.cancel()
-    logger.info(s"${getClass.getName} stopped")
+    logger.info(s"${getClass.getName} is STOPPED")
   }
 }

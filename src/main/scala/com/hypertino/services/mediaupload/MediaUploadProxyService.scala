@@ -1,3 +1,10 @@
+/*
+ * Copyright (c) 2017 Magomed Abdurakhmanov, Hypertino
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
+ */
+
 package com.hypertino.services.mediaupload
 
 import java.io.{ByteArrayInputStream, InputStream, OutputStream}
@@ -39,9 +46,9 @@ class MediaUploadProxyService(implicit val injector: Injector) extends Service w
   protected val proxyHttpHandler = actorSystem.actorOf(Props(new UploadProxyActor(hyperbus,minioClient, config.processingTimeout)), name = "proxy-handler" + SeqGenerator.create())
   IO(Http) ! Http.Bind(proxyHttpHandler, interface = config.interface, port = config.port)
 
-  logger.info(s"${getClass.getName} started")
+  logger.info(s"${getClass.getName} is STARTED")
 
   override def stopService(controlBreak: Boolean, timeout: FiniteDuration): Future[Unit] = actorSystem.terminate().map { _ ⇒
-    logger.info(s"${getClass.getName} stopped")
+    logger.info(s"${getClass.getName} is STOPPED")
   }
 }

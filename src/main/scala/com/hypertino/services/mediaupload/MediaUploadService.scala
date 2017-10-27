@@ -1,3 +1,10 @@
+/*
+ * Copyright (c) 2017 Magomed Abdurakhmanov, Hypertino
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
+ */
+
 package com.hypertino.services.mediaupload
 
 import java.io.{File, FileOutputStream}
@@ -61,7 +68,7 @@ class MediaUploadService(implicit val injector: Injector) extends Service with I
   protected val handlers = hyperbus.subscribe(this, logger)
   protected val minioClient = new MinioClient(config.s3.endpoint, config.s3.accessKey, config.s3.secretKey)
 
-  logger.info(s"${getClass.getName} started")
+  logger.info(s"${getClass.getName} is STARTED")
 
   def onMediaFilesPost(implicit post: MediaFilesPost): Task[Created[Media]] = {
     import com.hypertino.binders.value._
@@ -275,6 +282,6 @@ class MediaUploadService(implicit val injector: Injector) extends Service with I
 
   override def stopService(controlBreak: Boolean, timeout: FiniteDuration): Future[Unit] = Future {
     handlers.foreach(_.cancel())
-    logger.info(s"${getClass.getName} stopped")
+    logger.info(s"${getClass.getName} is STOPPED")
   }
 }
