@@ -31,7 +31,7 @@ object MediaUploadServiceTest extends Module  with Subscribable {
   bind [Hyperbus] identifiedBy 'hyperbus to injected[Hyperbus]
   bind[ServiceRegistrator] to DummyRegistrator
   //bind [StorageClient] to injected[MinioStorageClient]
-  bind [StorageClient] identifiedBy "media-storage-client" to injected[SwiftStorageClient]
+  bind [StorageClient] identifiedBy 'mediaStorageClient to injected[SwiftStorageClient]
 
   val hyperStorageContent = mutable.Map[String, Value]()
 

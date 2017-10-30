@@ -63,7 +63,7 @@ class MediaUploadService(implicit val injector: Injector) extends Service with I
   import com.hypertino.binders.config.ConfigBinders._
   protected val config = inject[Config].read[MediaUploadServiceConfiguration]("media-upload")
   protected val handlers = hyperbus.subscribe(this, logger)
-  protected val storageClient = inject[StorageClient] (identified by "media-storage-client")
+  protected val storageClient = inject[StorageClient] (identified by 'mediaStorageClient)
 
   logger.info(s"${getClass.getName} is STARTED")
 
