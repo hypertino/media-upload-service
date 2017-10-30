@@ -4,7 +4,7 @@ scalaVersion := crossScalaVersions.value.head
 
 lazy val `media-upload-service` = project in file(".") enablePlugins Raml2Hyperbus settings (
     name := "media-upload-service",
-    version := "0.2-SNAPSHOT",
+    version := "0.3-SNAPSHOT",
     organization := "com.hypertino",
     resolvers ++= Seq(
       Resolver.sonatypeRepo("public")
@@ -15,6 +15,7 @@ lazy val `media-upload-service` = project in file(".") enablePlugins Raml2Hyperb
       "com.hypertino" %% "service-control" % "0.3.0",
       "com.sksamuel.scrimage" %% "scrimage-core" % "2.1.7",
       "io.minio" % "minio" % "3.0.6",
+      "org.javaswift" % "joss" % "0.9.17",
       "com.roundeights" %% "hasher" % "1.2.0",
       "com.jsuereth" %% "scala-arm" % "2.0",
       "io.monix" %% "monix-kafka-10" % "0.14",

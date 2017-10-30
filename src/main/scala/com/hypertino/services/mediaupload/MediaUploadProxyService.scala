@@ -16,6 +16,7 @@ import com.hypertino.hyperbus.model.InternalServerError
 import com.hypertino.hyperbus.util.SeqGenerator
 import com.hypertino.service.control.api.Service
 import com.hypertino.services.mediaupload.impl.UploadProxyActor
+import com.hypertino.services.mediaupload.storage.StorageClient
 import com.typesafe.config.Config
 import com.typesafe.scalalogging.StrictLogging
 import io.minio.MinioClient
@@ -30,8 +31,10 @@ import spray.routing._
 import scala.concurrent.duration._
 import scala.concurrent.Future
 
-case class MediaUploadProxyServiceConfiguration(s3: S3Config, port: Int,
+case class MediaUploadProxyServiceConfiguration(port: Int,
+                                                defaultBucketName: String,
                                                 interface: String = "::0",
+                                                directTransform: Boolean = false,
                                                 processingTimeout: FiniteDuration = 1.minute)
 
 class MediaUploadProxyService(implicit val injector: Injector) extends Service with Injectable with StrictLogging {
@@ -40,10 +43,10 @@ class MediaUploadProxyService(implicit val injector: Injector) extends Service w
   protected implicit val actorSystem = ActorSystem()
   import com.hypertino.binders.config.ConfigBinders._
   protected val config = inject[Config].read[MediaUploadProxyServiceConfiguration]("media-upload-proxy")
-  protected val minioClient = new MinioClient(config.s3.endpoint, config.s3.accessKey, config.s3.secretKey)
+  protected val storageClient = inject[StorageClient] (identified by "media-storage-client")
 
   // the handler actor replies to incoming HttpRequests
-  protected val proxyHttpHandler = actorSystem.actorOf(Props(new UploadProxyActor(hyperbus,minioClient, config.processingTimeout)), name = "proxy-handler" + SeqGenerator.create())
+  protected val proxyHttpHandler = actorSystem.actorOf(Props(new UploadProxyActor(hyperbus, storageClient, config.directTransform, config.processingTimeout, config.defaultBucketName)), name = "proxy-handler" + SeqGenerator.create())
   IO(Http) ! Http.Bind(proxyHttpHandler, interface = config.interface, port = config.port)
 
   logger.info(s"${getClass.getName} is STARTED")

@@ -11,8 +11,11 @@ import com.hypertino.binders.value.Value
 import com.hypertino.hyperbus.Hyperbus
 import com.hypertino.hyperbus.model.{Created, DynamicBody, EmptyBody, ErrorBody, MessagingContext, NoContent, NotFound, Ok, ResponseBase}
 import com.hypertino.hyperbus.subscribe.Subscribable
+import com.hypertino.hyperbus.transport.api.ServiceRegistrator
+import com.hypertino.hyperbus.transport.registrators.DummyRegistrator
 import com.hypertino.mediaupload.apiref.hyperstorage.{ContentDelete, ContentGet, ContentPatch, ContentPut}
 import com.hypertino.service.config.ConfigLoader
+import com.hypertino.services.mediaupload.storage.{MinioStorageClient, StorageClient, SwiftStorageClient}
 import com.typesafe.config.Config
 import monix.eval.Task
 import monix.execution.Scheduler
@@ -26,6 +29,10 @@ object MediaUploadServiceTest extends Module  with Subscribable {
   bind [Config] to ConfigLoader()
   bind [Scheduler] identifiedBy 'scheduler to scheduler
   bind [Hyperbus] identifiedBy 'hyperbus to injected[Hyperbus]
+  bind[ServiceRegistrator] to DummyRegistrator
+  //bind [StorageClient] to injected[MinioStorageClient]
+  bind [StorageClient] identifiedBy "media-storage-client" to injected[SwiftStorageClient]
+
   val hyperStorageContent = mutable.Map[String, Value]()
 
   def onContentPut(implicit request: ContentPut): Task[ResponseBase] = {
@@ -40,7 +47,7 @@ object MediaUploadServiceTest extends Module  with Subscribable {
   def onContentPatch(implicit request: ContentPatch): Task[ResponseBase] = {
     hyperStorageContent.get(request.path) match {
       case Some(v) ⇒
-        hyperStorageContent.put(request.path, v + request.body.content)
+        hyperStorageContent.put(request.path, v % request.body.content)
         Task.eval(Ok(EmptyBody))
 
       case None ⇒
@@ -70,7 +77,7 @@ object MediaUploadServiceTest extends Module  with Subscribable {
 
     Thread.sleep(500)
     val mediaUploadService = new MediaUploadService()
-    val minioKafkaToHyperbusService = new MinioKafkaToHyperbusService()
+    //val minioKafkaToHyperbusService = new MinioKafkaToHyperbusService()
     val mediaUploadProxyService = new MediaUploadProxyService()
     Console.readLine()
   }

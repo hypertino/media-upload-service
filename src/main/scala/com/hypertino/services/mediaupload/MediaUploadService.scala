@@ -15,18 +15,18 @@ import java.util.regex.Pattern
 
 import com.hypertino.binders.value.{Null, Obj, Text, Value}
 import com.hypertino.hyperbus.Hyperbus
-import com.hypertino.hyperbus.model.{Accepted, Body, Conflict, Created, DynamicBody, ErrorBody, NotFound, Ok, Response}
+import com.hypertino.hyperbus.model.{Accepted, Conflict, Created, DynamicBody, ErrorBody, NotFound, Ok, Response}
 import com.hypertino.hyperbus.subscribe.Subscribable
 import com.hypertino.hyperbus.util.SeqGenerator
 import com.hypertino.mediaupload.api.{Media, MediaFileGet, MediaFilesPost, MediaStatus}
 import com.hypertino.mediaupload.apiref.hyperstorage.{ContentGet, ContentPatch, ContentPut}
 import com.hypertino.service.control.api.Service
-import com.roundeights.hasher.Hasher
+import com.hypertino.services.mediaupload.impl.MediaIdUtil
+import com.hypertino.services.mediaupload.storage.StorageClient
 import com.sksamuel.scrimage.Image
 import com.sksamuel.scrimage.nio.{JpegWriter, PngWriter}
 import com.typesafe.config.Config
 import com.typesafe.scalalogging.StrictLogging
-import io.minio.MinioClient
 import monix.eval.Task
 import monix.execution.Scheduler
 import scaldi.{Injectable, Injector}
@@ -46,7 +46,6 @@ case class Scheme(regex: String, transformations: Seq[Transformation], bucket: O
 case class Rewrite(from: String, to: String) {
   private lazy val regexPattern = Pattern.compile(from)
   def rewrite(uri: String): Option[String] = {
-
     val matcher = regexPattern.matcher(uri)
     if (matcher.matches()) {
       Some(matcher.replaceAll(to))
@@ -56,9 +55,7 @@ case class Rewrite(from: String, to: String) {
   }
 }
 
-case class S3Config(endpoint: String, accessKey: String, secretKey: String, bucket: Option[String])
-
-case class MediaUploadServiceConfiguration(s3: S3Config, rewrites: Seq[Rewrite], schemes: Seq[Scheme])
+case class MediaUploadServiceConfiguration(storageUriBase: String, rewrites: Seq[Rewrite], schemes: Seq[Scheme])
 
 class MediaUploadService(implicit val injector: Injector) extends Service with Injectable with Subscribable with StrictLogging{
   protected implicit val scheduler = inject[Scheduler]
@@ -66,14 +63,14 @@ class MediaUploadService(implicit val injector: Injector) extends Service with I
   import com.hypertino.binders.config.ConfigBinders._
   protected val config = inject[Config].read[MediaUploadServiceConfiguration]("media-upload")
   protected val handlers = hyperbus.subscribe(this, logger)
-  protected val minioClient = new MinioClient(config.s3.endpoint, config.s3.accessKey, config.s3.secretKey)
+  protected val storageClient = inject[StorageClient] (identified by "media-storage-client")
 
   logger.info(s"${getClass.getName} is STARTED")
 
   def onMediaFilesPost(implicit post: MediaFilesPost): Task[Created[Media]] = {
     import com.hypertino.binders.value._
-    val mediaId = Hasher(new URI(post.body.originalUrl).getPath).sha1.hex
-    val media = Media(mediaId, post.body.originalUrl, Seq.empty, MediaStatus.PROGRESS)
+    val mediaId = MediaIdUtil.mediaId(post.body.originalUrl)
+    val media = Media(mediaId, rewrite(post.body.originalUrl), Seq.empty, MediaStatus.PROGRESS)
     val path = hyperStorageMediaPath(mediaId)
 
     hyperbus
@@ -122,16 +119,13 @@ class MediaUploadService(implicit val injector: Injector) extends Service with I
         val url = new URL(originalUrl)
         val originalTempFileName = tempDir + SeqGenerator.create() + extension(url.getFile)
         val tempFileName = tempDir + SeqGenerator.create() + extension(url.getFile)
-        val bucketName = scheme.bucket.getOrElse(config.s3.bucket.getOrElse(
-          throw new IllegalArgumentException("Bucket name isn't configured")
-        ))
+        val (originalBucketName, originalFileName) = getOriginalBucketAndFileName(media.originalUrl)
+        val bucketName = scheme.bucket.getOrElse(originalBucketName)
 
-        val fileName = getFileName(media.originalUrl)
         import resource._
 
-        if (media.originalUrl.startsWith(config.s3.endpoint)) {
-          val (originalBucketName,originalFileName) = getOriginalBucketAndFileName(media.originalUrl)
-          minioClient.getObject(originalBucketName,originalFileName, originalTempFileName)
+        if (originalUrl.startsWith(config.storageUriBase)) {
+          storageClient.download(originalBucketName, originalFileName, originalTempFileName)
         }
         else {
           for {
@@ -157,17 +151,17 @@ class MediaUploadService(implicit val injector: Injector) extends Service with I
           val newWidth = transformation.width.getOrElse(originalImage.width)
           val newHeight = transformation.height.getOrElse(originalImage.height)
           val dimensions = s"${newWidth}x$newHeight"
-          val newFileName = addSuffix(fileName, "-" + dimensions)
+          val newFileName = addSuffix(originalFileName, "-" + dimensions)
 
           val newImage = transformImage(originalImage, newWidth, newHeight)
-          val versionUri = config.s3.endpoint + "/" + bucketName + "/" + newFileName
-
-          for {stream ← managed(newImage.stream(imageWriter))
-          } {
-            logger.info(s"Uploading $versionUri")
-            minioClient.putObject(bucketName, newFileName, stream, probeContentType(originalUrl))
+          //val versionUri = config.s3.endpoint + "/" + bucketName + "/" + newFileName
+          val stream = newImage.stream(imageWriter)
+          val versionUri = try {
+            logger.info(s"Uploading $bucketName/$newFileName")
+            storageClient.upload(bucketName, newFileName, stream, probeContentType(originalUrl))
+          } finally {
+            stream.close()
           }
-
 
           dimensions → Text(versionUri)
         }
@@ -202,21 +196,26 @@ class MediaUploadService(implicit val injector: Injector) extends Service with I
     }
   }
 
-  protected def getFileName(url: String): String = {
-    val uri = new URI(url)
-    val path = uri.getPath
-    val segments = path.split('/').filter(_.nonEmpty)
-    if (url.startsWith(config.s3.endpoint) && segments.tail.nonEmpty) {
-      segments.tail.mkString("/")
+//  protected def getFileName(url: String): String = {
+//    val uri = new URI(url)
+//    val path = uri.getPath
+//    val segments = path.split('/').filter(_.nonEmpty)
+//    if (url.startsWith(config.s3.endpoint) && segments.tail.nonEmpty) {
+//      segments.tail.mkString("/")
+//    }
+//    else {
+//      if (path startsWith "/") path.substring(1) else path
+//    }
+//  }
+//
+  protected def getOriginalBucketAndFileName(originalUrl: String): (String, String) = {
+    val path: String = if (originalUrl.startsWith(config.storageUriBase)) {
+      originalUrl.substring(config.storageUriBase.length)
+    } else {
+      val uri = new URI(originalUrl)
+      uri.getPath
     }
-    else {
-      if (path startsWith "/") path.substring(1) else path
-    }
-  }
 
-  protected def getOriginalBucketAndFileName(originalUrl: String): (String,String) = {
-    val uri = new URI(originalUrl)
-    val path = uri.getPath
     val segments = path.split('/').filter(_.nonEmpty)
     if (segments.tail.isEmpty) {
       throw new RuntimeException(s"Can't get bucket and filename from $originalUrl")
@@ -252,11 +251,11 @@ class MediaUploadService(implicit val injector: Injector) extends Service with I
     }
   }
 
-  protected def probeContentType(url: String): String = {
+  protected def probeContentType(url: String): Option[String] = {
     extension(url).toLowerCase() match {
-      case ".jpg" | ".jpeg" ⇒ "image/jpeg"
-      case ".png" ⇒ "image/png"
-      case  _ ⇒ null
+      case ".jpg" | ".jpeg" ⇒ Some("image/jpeg")
+      case ".png" ⇒ Some("image/png")
+      case  _ ⇒ None
     }
   }
 

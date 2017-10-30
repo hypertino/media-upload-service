@@ -7,32 +7,29 @@
 
 package com.hypertino.services.mediaupload.impl
 
-import java.net.URI
+import akka.actor._
+import com.hypertino.hyperbus.Hyperbus
+import com.hypertino.hyperbus.model.{ErrorBody, Ok}
+import com.hypertino.hyperbus.util.IdGenerator
+import com.hypertino.mediaupload.api._
+import com.hypertino.services.mediaupload.storage.StorageClient
+import com.typesafe.scalalogging.StrictLogging
+import monix.eval.Task
+import spray.can.Http
+import spray.can.Http.RegisterChunkHandler
+import spray.http.HttpMethods._
+import spray.http.MediaTypes._
+import spray.http._
 
 import scala.concurrent.duration._
-import akka.pattern.ask
-import akka.util.Timeout
-import akka.actor._
-import spray.can.Http
-import spray.can.server.Stats
-import spray.util._
-import spray.http._
-import HttpMethods._
-import MediaTypes._
-import com.hypertino.hyperbus.Hyperbus
-import com.hypertino.hyperbus.model.{ErrorBody, GatewayTimeout, Ok}
-import com.hypertino.hyperbus.util.IdGenerator
-import com.hypertino.mediaupload.api.{Media, MediaFileGet, MediaStatus}
-import com.roundeights.hasher.Hasher
-import io.minio.MinioClient
-import monix.eval.Task
-import spray.can.Http.RegisterChunkHandler
-
 import scala.util.Success
 import scala.util.control.NonFatal
 
-class UploadProxyActor(hyperbus: Hyperbus, minioClient: MinioClient, processingTimeout: FiniteDuration) extends Actor with ActorLogging {
-  import context.dispatcher // ExecutionContext for the futures and scheduler
+class UploadProxyActor(hyperbus: Hyperbus,
+                       storageApi: StorageClient,
+                       directTransform: Boolean,
+                       processingTimeout: FiniteDuration,
+                       defaultBucketName: String) extends Actor with StrictLogging { // ExecutionContext for the futures and scheduler
 
   def receive = {
     // when a new connection comes in we register ourselves as the connection handler
@@ -45,12 +42,12 @@ class UploadProxyActor(hyperbus: Hyperbus, minioClient: MinioClient, processingT
       // emulate chunked behavior for POST requests to this path
       val parts = r.asPartStream()
       val client = sender
-      val handler = context.actorOf(Props(new FileUploadHandler(client, parts.head.asInstanceOf[ChunkedRequestStart], uri, hyperbus, minioClient, processingTimeout)))
+      val handler = context.actorOf(Props(new FileUploadHandler(client, parts.head.asInstanceOf[ChunkedRequestStart], uri, hyperbus, storageApi, directTransform, processingTimeout, defaultBucketName)))
       parts.tail.foreach(handler !)
 
     case s@ChunkedRequestStart(HttpRequest(POST, uri, _, _, _)) =>
       val client = sender
-      val handler = context.actorOf(Props(new FileUploadHandler(client, s, uri, hyperbus, minioClient, processingTimeout)))
+      val handler = context.actorOf(Props(new FileUploadHandler(client, s, uri, hyperbus, storageApi, directTransform, processingTimeout, defaultBucketName)))
       sender ! RegisterChunkHandler(handler)
 
     case _: HttpRequest => sender ! HttpResponse(status = 404, entity = "Unknown resource!")
@@ -80,16 +77,17 @@ class UploadProxyActor(hyperbus: Hyperbus, minioClient: MinioClient, processingT
   )
 }
 
+import java.io.{File, FileInputStream, FileOutputStream}
+
 import akka.actor._
-import scala.concurrent.duration._
-import java.io.{InputStream, FileInputStream, FileOutputStream, File}
-import org.jvnet.mimepull.{MIMEPart, MIMEMessage}
+import org.jvnet.mimepull.{MIMEMessage, MIMEPart}
+import spray.http.HttpHeaders.{RawHeader, _}
+import spray.http.MediaTypes._
 import spray.http._
-import MediaTypes._
-import HttpHeaders._
-import parser.HttpParser
-import HttpHeaders.RawHeader
+import spray.http.parser.HttpParser
 import spray.io.CommandWrapper
+
+import scala.concurrent.duration._
 
 case class WatchMedia(mediaIdMap: Map[String,String], ttl: Long)
 
@@ -97,9 +95,11 @@ class FileUploadHandler(client: ActorRef,
                         start: ChunkedRequestStart,
                         uri: Uri,
                         hyperbus: Hyperbus,
-                        minioClient: MinioClient,
-                        processingTimeout: FiniteDuration
-                       ) extends Actor with ActorLogging {
+                        storageClient: StorageClient,
+                        directTransform: Boolean,
+                        processingTimeout: FiniteDuration,
+                        defaultBucketName: String
+                       ) extends Actor with StrictLogging {
 
   // todo: exponentialCheck
   val checkProcessingEach = 500.milliseconds
@@ -113,27 +113,27 @@ class FileUploadHandler(client: ActorRef,
   val Some(HttpHeaders.`Content-Type`(ContentType(multipart: MultipartMediaType, _))) = header[HttpHeaders.`Content-Type`]
   val boundary = multipart.parameters("boundary")
 
-  log.info(s"Starting upload $method $uri with multipart boundary '$boundary' writing to $tmpFile")
+  logger.info(s"Starting upload $method $uri with multipart boundary '$boundary' writing to $tmpFile")
   var bytesWritten = 0L
 
   def receive = {
     case c: MessageChunk =>
-      log.debug(s"Got ${c.data.length} bytes of chunked request $method $uri")
+      logger.debug(s"Got ${c.data.length} bytes of chunked request $method $uri")
 
       output.write(c.data.toByteArray)
       bytesWritten += c.data.length
 
     case e: ChunkedMessageEnd =>
-      log.info(s"Uploaded chunked request $method $uri")
+      logger.info(s"Uploaded chunked request $method $uri")
       output.close()
 
       try {
-        uploadToS3(uri, tmpFile)
+        uploadToStorage(uri, tmpFile)
       }
       catch {
         case NonFatal(exception) ⇒
           val error = ErrorBody("upload-failed", Some(exception.toString))
-          log.error(exception, s"Upload failed #${error.errorId}")
+          logger.error(s"Upload failed #${error.errorId}", exception)
           client ! HttpResponse(status = StatusCodes.InternalServerError,
             HttpEntity(`application/json`, error.serializeToString)
           )
@@ -157,14 +157,14 @@ class FileUploadHandler(client: ActorRef,
             results.forall {
               case (_, Success(Ok(m: Media, _))) if m.status == MediaStatus.NORMAL ⇒ true
               case (mediaId, other) ⇒ {
-                log.debug(s"Still waiting for media $mediaId, status: $other")
+                logger.debug(s"Still waiting for media $mediaId, status: $other")
                 false
               }
             }
           }
           catch {
-            case NonFatal(e) ⇒
-              log.error(e, "Exception while waiting for processing")
+            case e: Throwable ⇒
+              logger.error("Exception while waiting for processing", e)
               false
           }
 
@@ -184,7 +184,7 @@ class FileUploadHandler(client: ActorRef,
           else {
             import com.hypertino.binders.value._
             val error = ErrorBody("processing-timeout", Some("Timed-out while waiting for the processing"), extra = w.mediaIdMap.toValue)
-            log.error(s"Didn't get processing result for ${w.mediaIdMap} #${error.errorId}")
+            logger.error(s"Didn't get processing result for ${w.mediaIdMap} #${error.errorId}")
             client ! HttpResponse(status = StatusCodes.GatewayTimeout,
               HttpEntity(`application/json`, error.serializeToString)
             )
@@ -207,11 +207,11 @@ class FileUploadHandler(client: ActorRef,
       name <- disp.parameters.get(param)
     } yield name
 
-  def uploadToS3(uri: Uri, file: File): Unit = {
+  def uploadToStorage(uri: Uri, file: File): Unit = {
     try {
       val path = uri.path.toString().split("/").filterNot(_.isEmpty)
       val (bucketName, folder) = if (path.isEmpty) {
-        ("media-upload", "")
+        (defaultBucketName, "")
       } else {
         (path.head, path.tail.mkString("/"))
       }
@@ -226,8 +226,21 @@ class FileUploadHandler(client: ActorRef,
         val fileName = subFolders + id + fileNameForPart(part).map(extension).getOrElse("")
         val name = nameForPart(part).getOrElse(index.toString)
         val fullFileName = if (folder.isEmpty) fileName else folder + "/" + fileName
-        val mediaId = Hasher("/" + bucketName + "/" + fullFileName).sha1.hex
-        minioClient.putObject(bucketName, fullFileName, part.read(), contentType)
+        val url = storageClient.upload(bucketName, fullFileName, part.read(), Option(contentType))
+        val mediaId = MediaIdUtil.mediaId(url)
+
+        if (directTransform) {
+          import com.hypertino.hyperbus.model.MessagingContext.Implicits.emptyContext
+          import monix.execution.Scheduler.Implicits.global // todo: inject/config
+          hyperbus
+            .ask(MediaFilesPost(CreateMediaVersions(url)))
+            .onErrorRecover {
+              case NonFatal(e) ⇒
+                logger.error(s"Can't create versions for $url", e)
+                Unit
+            }
+            .runAsync
+        }
 
         name → mediaId
       } toMap
