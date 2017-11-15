@@ -16,6 +16,7 @@ import com.hypertino.hyperbus.transport.registrators.DummyRegistrator
 import com.hypertino.mediaupload.apiref.hyperstorage.{ContentDelete, ContentGet, ContentPatch, ContentPut}
 import com.hypertino.service.config.ConfigLoader
 import com.hypertino.services.mediaupload.storage.{MinioStorageClient, StorageClient, SwiftStorageClient}
+import com.hypertino.services.mediaupload.utils.ErrorCode
 import com.typesafe.config.Config
 import monix.eval.Task
 import monix.execution.Scheduler
@@ -51,7 +52,7 @@ object MediaUploadServiceTest extends Module  with Subscribable {
         Task.eval(Ok(EmptyBody))
 
       case None ⇒
-        Task.raiseError(NotFound(ErrorBody("not-found")))
+        Task.raiseError(NotFound())
     }
   }
 
@@ -60,14 +61,14 @@ object MediaUploadServiceTest extends Module  with Subscribable {
       Task.eval(Ok(EmptyBody))
     }
     else {
-      Task.raiseError(NotFound(ErrorBody("not-found")))
+      Task.raiseError(NotFound())
     }
   }
 
   def onContentGet(implicit request: ContentGet): Task[ResponseBase] = {
     hyperStorageContent.get(request.path) match {
       case Some(v) ⇒ Task.eval(Ok(DynamicBody(v)))
-      case None ⇒ Task.raiseError(NotFound(ErrorBody("not-found", Some(request.path))))
+      case None ⇒ Task.raiseError(NotFound(ErrorBody(ErrorCode.NOT_FOUND, Some(request.path))))
     }
   }
 

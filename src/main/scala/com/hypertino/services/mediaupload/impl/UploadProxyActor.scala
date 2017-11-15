@@ -13,6 +13,7 @@ import com.hypertino.hyperbus.model.{ErrorBody, Ok}
 import com.hypertino.hyperbus.util.IdGenerator
 import com.hypertino.mediaupload.api._
 import com.hypertino.services.mediaupload.storage.StorageClient
+import com.hypertino.services.mediaupload.utils.ErrorCode
 import com.typesafe.scalalogging.StrictLogging
 import monix.eval.Task
 import spray.can.Http
@@ -132,7 +133,7 @@ class FileUploadHandler(client: ActorRef,
       }
       catch {
         case NonFatal(exception) ⇒
-          val error = ErrorBody("upload-failed", Some(exception.toString))
+          val error = ErrorBody(ErrorCode.UPLOAD_FAILED, Some(exception.toString))
           logger.error(s"Upload failed #${error.errorId}", exception)
           client ! HttpResponse(status = StatusCodes.InternalServerError,
             HttpEntity(`application/json`, error.serializeToString)
@@ -183,7 +184,7 @@ class FileUploadHandler(client: ActorRef,
           }
           else {
             import com.hypertino.binders.value._
-            val error = ErrorBody("processing-timeout", Some("Timed-out while waiting for the processing"), extra = w.mediaIdMap.toValue)
+            val error = ErrorBody(ErrorCode.PROCESSING_TIMEOUT, Some("Timed-out while waiting for the processing"), extra = w.mediaIdMap.toValue)
             logger.error(s"Didn't get processing result for ${w.mediaIdMap} #${error.errorId}")
             client ! HttpResponse(status = StatusCodes.GatewayTimeout,
               HttpEntity(`application/json`, error.serializeToString)

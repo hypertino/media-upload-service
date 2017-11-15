@@ -23,6 +23,7 @@ import com.hypertino.mediaupload.apiref.hyperstorage.{ContentGet, ContentPatch, 
 import com.hypertino.service.control.api.Service
 import com.hypertino.services.mediaupload.impl.MediaIdUtil
 import com.hypertino.services.mediaupload.storage.StorageClient
+import com.hypertino.services.mediaupload.utils.ErrorCode
 import com.sksamuel.scrimage.Image
 import com.sksamuel.scrimage.nio.{JpegWriter, PngWriter}
 import com.typesafe.config.Config
@@ -104,8 +105,8 @@ class MediaUploadService(implicit val injector: Injector) extends Service with I
           media.status match {
             case MediaStatus.PROGRESS | MediaStatus.SCHEDULED ⇒ Task.now(Accepted(rewriteMedia(media)))
             case MediaStatus.NORMAL ⇒ Task.now(Ok(rewriteMedia(media)))
-            case MediaStatus.FAILED ⇒ Task.raiseError(Conflict(ErrorBody("transform-failed", Some(s"Transformation of ${media.originalUrl} failed"))))
-            case MediaStatus.DELETED ⇒ Task.raiseError(NotFound(ErrorBody("media-not-found", Some(s"${get.mediaId} is not found"))))
+            case MediaStatus.FAILED ⇒ Task.raiseError(Conflict(ErrorBody(ErrorCode.TRANSFORM_FAILED, Some(s"Transformation of ${media.originalUrl} failed"))))
+            case MediaStatus.DELETED ⇒ Task.raiseError(NotFound(ErrorBody(ErrorCode.MEDIA_NOT_FOUND, Some(s"${get.mediaId} is not found"))))
           }
       }
   }
