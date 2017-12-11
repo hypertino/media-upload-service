@@ -21,7 +21,7 @@ import com.hypertino.hyperbus.util.SeqGenerator
 import com.hypertino.mediaupload.api.{Media, MediaFileGet, MediaFilesPost, MediaStatus}
 import com.hypertino.mediaupload.apiref.hyperstorage.{ContentGet, ContentPatch, ContentPut}
 import com.hypertino.service.control.api.Service
-import com.hypertino.services.mediaupload.impl.MediaIdUtil
+import com.hypertino.services.mediaupload.impl.{DimensionsUtil, MediaIdUtil}
 import com.hypertino.services.mediaupload.storage.StorageClient
 import com.hypertino.services.mediaupload.utils.ErrorCode
 import com.sksamuel.scrimage.Image
@@ -149,8 +149,9 @@ class MediaUploadService(implicit val injector: Injector) extends Service with I
             JpegWriter(transformation.compression.getOrElse(90), progressive=true)
           }
 
-          val newWidth = transformation.width.getOrElse(originalImage.width)
-          val newHeight = transformation.height.getOrElse(originalImage.height)
+          val (newWidth, newHeight) = DimensionsUtil.getNewDimensions(originalImage.width, originalImage.height,
+            transformation.width, transformation.height)
+
           val dimensions = s"${newWidth}x$newHeight"
           val newFileName = addSuffix(originalFileName, "-" + dimensions)
 
