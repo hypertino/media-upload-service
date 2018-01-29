@@ -19,14 +19,17 @@ class SwiftStorageClient(implicit val injector: Injector) extends StorageClient 
   import com.hypertino.binders.config.ConfigBinders._
   protected val config = inject[Config].read[SwiftStorageClientConfig]("swift")
 
-  val swiftAccountFactory = new org.javaswift.joss.client.factory.AccountFactory()
-    .setUsername(config.username)
-    .setPassword(config.password)
-    .setAuthUrl(config.authUrl)
-  config.tenantId.foreach(swiftAccountFactory.setTenantId)
-  config.tenantName.foreach(swiftAccountFactory.setTenantName)
+  lazy val swiftAccountFactory = {
+    val s = new org.javaswift.joss.client.factory.AccountFactory()
+      .setUsername(config.username)
+      .setPassword(config.password)
+      .setAuthUrl(config.authUrl)
+    config.tenantId.foreach(s.setTenantId)
+    config.tenantName.foreach(s.setTenantName)
+    s
+  }
 
-  val swiftAccount = swiftAccountFactory.createAccount()
+  lazy val swiftAccount = swiftAccountFactory.createAccount()
 
   override def upload(bucket: String, path: String, stream: InputStream, contentType: Option[String]): String = {
     val container = swiftAccount.getContainer(bucket)
