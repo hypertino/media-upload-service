@@ -74,31 +74,4 @@ class ImageMediaTransformer(transformation: Transformation, storageClient: Stora
       }
     }
   }
-
-  protected def addSuffix(fileName: String, suffix: String): String = {
-    val di = fileName.lastIndexOf('.')
-    if (di >= 0) {
-      fileName.substring(0,di) + suffix + fileName.substring(di)
-    } else {
-      fileName + suffix
-    }
-  }
-
-  protected def extension(fileName: String): String = {
-    val li = fileName.lastIndexOf(".")
-    if (li > 0) {
-      fileName.substring(li)
-    }
-    else {
-      ""
-    }
-  }
-
-  protected def probeContentType(url: String): Option[String] = {
-    extension(url).toLowerCase() match {
-      case ".jpg" | ".jpeg" ⇒ Some("image/jpeg")
-      case ".png" ⇒ Some("image/png")
-      case  _ ⇒ None
-    }
-  }
 }

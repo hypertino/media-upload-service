@@ -14,6 +14,7 @@ lazy val `media-upload-service` = project in file(".") enablePlugins Raml2Hyperb
       "com.hypertino" %% "hyperbus-t-inproc" % "0.6-SNAPSHOT" % "test",
       "com.hypertino" %% "service-control" % "0.5.0",
       "com.sksamuel.scrimage" %% "scrimage-core" % "2.1.7",
+      "net.bramp.ffmpeg" % "ffmpeg" % "0.6.2",
       "io.minio" % "minio" % "3.0.6",
       "org.javaswift" % "joss" % "0.9.17",
       "com.roundeights" %% "hasher" % "1.2.0",
