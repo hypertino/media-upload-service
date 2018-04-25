@@ -7,7 +7,7 @@
 
 package com.hypertino.services.mediaupload
 
-import java.io.{File, FileOutputStream}
+import java.io.{File, FileOutputStream, InputStream}
 import java.net.{URI, URL}
 import java.nio.channels.Channels
 import java.nio.file.Paths
@@ -23,6 +23,7 @@ import com.hypertino.mediaupload.apiref.hyperstorage.{ContentGet, ContentPatch, 
 import com.hypertino.service.control.api.Service
 import com.hypertino.services.mediaupload.impl.{DimensionsUtil, MediaIdUtil}
 import com.hypertino.services.mediaupload.storage.StorageClient
+import com.hypertino.services.mediaupload.transform.ImageMediaTransformer
 import com.hypertino.services.mediaupload.utils.ErrorCode
 import com.sksamuel.scrimage.Image
 import com.sksamuel.scrimage.nio.{JpegWriter, PngWriter}
@@ -37,9 +38,49 @@ import scala.concurrent.duration.FiniteDuration
 import scala.util.control.NonFatal
 import scala.util.matching.Regex
 
-case class Transformation(width: Option[Int], height: Option[Int], compression: Option[Int])
+case class Watermark(
+                      fileName: String,
+                      left: Option[Int],
+                      top: Option[Int],
+                      right: Option[Int],
+                      bottom: Option[Int],
+                      percents: Boolean
+                    ) {
 
-case class Scheme(regex: String, transformations: Seq[Transformation], bucket: Option[String]) {
+  def placement(
+                 watermarkWidth: Int, watermarkHeight: Int,
+                 mediaWidth: Int, mediaHeight: Int
+               ): (Int, Int) = {
+
+    val l = left.map(p(mediaWidth, _))
+    val r = right.map(p(mediaWidth, _))
+    val t = top.map(p(mediaHeight, _))
+    val b = bottom.map(p(mediaHeight, _))
+
+    val x = l.getOrElse {
+      r.map(rx => mediaWidth-rx-watermarkWidth).getOrElse(mediaWidth/2-watermarkWidth/2)
+    }
+    val y = t.getOrElse {
+      b.map(ry => mediaHeight-ry-watermarkHeight).getOrElse(mediaHeight/2-watermarkHeight/2)
+    }
+    (x,y)
+  }
+
+  private def p(all: Int, v: Int): Int = if (percents) {
+    (v*all)/100
+  } else {
+    v
+  }
+}
+
+case class Dimensions(width: Option[Int], height: Option[Int], compression: Option[Int])
+
+case class Transformation(
+                           watermark: Option[Watermark],
+                           dimensions: Seq[Dimensions]
+                         )
+
+case class Scheme(regex: String, transformation: Transformation, bucket: Option[String]) {
   private lazy val regexPattern = new Regex(regex)
   def matches(uri: String): Boolean = regexPattern.findFirstMatchIn(uri).isDefined
 }
@@ -139,35 +180,8 @@ class MediaUploadService(implicit val injector: Injector) extends Service with I
         }
 
         val originalPath = Paths.get(originalTempFileName)
-        val originalImage = Image.fromPath(originalPath)
-
-        val versions = scheme.transformations.map { transformation ⇒
-          implicit val imageWriter = if (media.originalUrl.endsWith(".png")) {
-            PngWriter()
-          }
-          else {
-            JpegWriter(transformation.compression.getOrElse(90), progressive=true)
-          }
-
-          val (newWidth, newHeight) = DimensionsUtil.getNewDimensions(originalImage.width, originalImage.height,
-            transformation.width, transformation.height)
-
-          val dimensions = s"${newWidth}x$newHeight"
-          val newFileName = addSuffix(originalFileName, "-" + dimensions)
-
-          val newImage = transformImage(originalImage, newWidth, newHeight)
-          //val versionUri = config.s3.endpoint + "/" + bucketName + "/" + newFileName
-          val stream = newImage.stream(imageWriter)
-          val versionUri = try {
-            logger.info(s"Uploading $bucketName/$newFileName")
-            storageClient.upload(bucketName, newFileName, stream, probeContentType(originalUrl))
-          } finally {
-            stream.close()
-          }
-
-          dimensions → Text(versionUri)
-        }
-        Obj(versions.toMap)
+        val transformer = new ImageMediaTransformer(scheme.transformation, storageClient, bucketName)
+        transformer.transform(media, originalFileName, originalPath)
       } getOrElse {
         logger.info(s"Nothing to do with ${media.originalUrl}")
         Null
@@ -198,18 +212,6 @@ class MediaUploadService(implicit val injector: Injector) extends Service with I
     }
   }
 
-//  protected def getFileName(url: String): String = {
-//    val uri = new URI(url)
-//    val path = uri.getPath
-//    val segments = path.split('/').filter(_.nonEmpty)
-//    if (url.startsWith(config.s3.endpoint) && segments.tail.nonEmpty) {
-//      segments.tail.mkString("/")
-//    }
-//    else {
-//      if (path startsWith "/") path.substring(1) else path
-//    }
-//  }
-//
   protected def getOriginalBucketAndFileName(originalUrl: String): (String, String) = {
     val path: String = if (originalUrl.startsWith(config.storageUriBase)) {
       originalUrl.substring(config.storageUriBase.length)
@@ -223,15 +225,6 @@ class MediaUploadService(implicit val injector: Injector) extends Service with I
       throw new RuntimeException(s"Can't get bucket and filename from $originalUrl")
     }
     (segments.head, segments.tail.mkString("/"))
-  }
-
-  protected def addSuffix(fileName: String, suffix: String): String = {
-    val di = fileName.lastIndexOf('.')
-    if (di >= 0) {
-      fileName.substring(0,di) + suffix + fileName.substring(di)
-    } else {
-      fileName + suffix
-    }
   }
 
   protected def extension(fileName: String): String = {
@@ -250,14 +243,6 @@ class MediaUploadService(implicit val injector: Injector) extends Service with I
     }
     else {
       path
-    }
-  }
-
-  protected def probeContentType(url: String): Option[String] = {
-    extension(url).toLowerCase() match {
-      case ".jpg" | ".jpeg" ⇒ Some("image/jpeg")
-      case ".png" ⇒ Some("image/png")
-      case  _ ⇒ None
     }
   }
 
