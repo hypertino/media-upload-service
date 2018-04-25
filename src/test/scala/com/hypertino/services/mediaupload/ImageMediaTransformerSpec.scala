@@ -27,19 +27,22 @@ class ImageMediaTransformerSpec extends FlatSpec with Matchers {
       Seq(
         Dimensions(Some(400), Some(300), Some(10)),
         Dimensions(Some(700), Some(600), Some(9))
-      )
+      ),
+      Seq.empty
     )
     val imageMediaTransformer = new ImageMediaTransformer(transformation, storageClient, "input")
-    val r = imageMediaTransformer.transform(Media("1", "1.jpg",Null,MediaStatus.SCHEDULED),"1.jpg",Paths.get(rootPath + "/input/1.jpg"))
-    r shouldBe Obj.from(
+    val r = imageMediaTransformer.transform("1.jpg",Paths.get(rootPath + "/input/1.jpg"))
+    r._1 shouldBe Obj.from(
       "400x300" -> "./src/test/resources/image-media-transformer/input/1-400x300.jpg",
       "700x600" -> "./src/test/resources/image-media-transformer/input/1-700x600.jpg"
     )
+    r._2 shouldBe Null
 
-    val r2 = imageMediaTransformer.transform(Media("1", "2.png",Null,MediaStatus.SCHEDULED),"2.png",Paths.get(rootPath + "/input/2.png"))
-    r2 shouldBe Obj.from(
+    val r2 = imageMediaTransformer.transform("2.png",Paths.get(rootPath + "/input/2.png"))
+    r2._1 shouldBe Obj.from(
       "400x300" -> "./src/test/resources/image-media-transformer/input/2-400x300.png",
       "700x600" -> "./src/test/resources/image-media-transformer/input/2-700x600.png"
     )
+    r._2 shouldBe Null
   }
 }

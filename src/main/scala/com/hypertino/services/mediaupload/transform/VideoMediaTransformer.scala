@@ -7,10 +7,9 @@ import com.hypertino.binders.value.{Null, Obj, Text, Value}
 import com.hypertino.hyperbus.util.SeqGenerator
 import com.hypertino.mediaupload.api.Media
 import com.hypertino.services.mediaupload.Transformation
-import com.hypertino.services.mediaupload.impl.DimensionsUtil
+import com.hypertino.services.mediaupload.impl.{DimensionsUtil, MimeTypeUtils}
 import com.hypertino.services.mediaupload.storage.StorageClient
 import com.sksamuel.scrimage.Image
-import com.sksamuel.scrimage.nio.{JpegWriter, PngWriter}
 import com.typesafe.scalalogging.StrictLogging
 import net.bramp.ffmpeg.{FFmpegExecutor, FFprobe}
 import net.bramp.ffmpeg.builder.FFmpegBuilder
@@ -25,7 +24,7 @@ class VideoMediaTransformer(transformation: Transformation,
                             defaultAudioCodec: String = "aac"
                            ) extends MediaTransformer with StrictLogging {
 
-  def transform(media: Media, originalFileName: String, originalPath: Path): Value = {
+  def transform(originalFileName: String, originalPath: Path): (Value, Value) = {
     import scala.collection.JavaConverters._
     val ffprobe = new FFprobe()
     val probe = ffprobe.probe(originalPath.toString)
@@ -47,13 +46,14 @@ class VideoMediaTransformer(transformation: Transformation,
         .setComplexFilter(s"[1:v][0:v] scale2ref=${watermark.width}:${watermark.height}*sar [wm] [base]; [base][wm] overlay=x=${coords._1}:${coords._2},split=${transformation.dimensions.size}${transformation.dimensions.zipWithIndex.map(i => "[o"+i._2+"]").mkString(" ")}")
     }
 
+    val tempDir = Paths.get(System.getProperty("java.io.tmpdir"), SeqGenerator.create()).toString
     val files = transformation.dimensions.zipWithIndex.map { case (tr, index) ⇒
       val (newWidth, newHeight) = DimensionsUtil.getNewDimensions(videoStream.width, videoStream.height,
         tr.width, tr.height)
       val dimensions = s"${newWidth}x$newHeight"
       val newFileName = addSuffix(originalFileName, "-" + dimensions)
 
-      val tempFilePath = Paths.get(System.getProperty("java.io.tmpdir"), SeqGenerator.create(), newFileName)
+      val tempFilePath: Path = Paths.get(tempDir, newFileName)
       Files.createDirectories(tempFilePath.getParent)
 
       var output = builder
@@ -72,14 +72,22 @@ class VideoMediaTransformer(transformation: Transformation,
         .setVideoHeight(newHeight)
 
       tr.compression.foreach {c =>
+        val q = 1 + Math.min(Math.max((100 - c) * 30 / 100, 0), 30)
         output = output
-          .setVideoQuality(c)
-          .setAudioQuality(c)
+          .setVideoQuality(q)
+          .setAudioQuality(q)
       }
 
       builder = output.done()
       dimensions → tempFilePath
     }
+    val frame1path = Paths.get(tempDir, Paths.get(originalFileName) + ".jpeg")
+    builder
+      .addOutput(frame1path.toString)
+      .setVideoQuality(1)
+      .setFrames(1)
+      .done()
+    // todo: convert thumbnail from sample to display ration
     val executor = new FFmpegExecutor()
     executor.createJob(builder).run()
     val versions = files.map { v =>
@@ -87,12 +95,28 @@ class VideoMediaTransformer(transformation: Transformation,
       val stream = new FileInputStream(v._2.toString)
       val versionUri = try {
         logger.info(s"Uploading $bucketName/$newFileName")
-        storageClient.upload(bucketName, newFileName, stream, probeContentType(media.originalUrl))
+        storageClient.upload(bucketName, newFileName, stream, MimeTypeUtils.probeContentType(originalFileName))
       } finally {
         stream.close()
+        try {
+          Files.delete(v._2)
+        }
+        catch {
+          case e: Throwable =>
+            logger.warn(s"Can't delete file $newFileName", e)
+        }
       }
       v._1 -> Text(versionUri)
     }
-    Obj(versions.toMap)
+
+    val imageMediaTransformer = new ImageMediaTransformer(
+      Transformation(transformation.watermark,transformation.thumbnails,Seq.empty),
+      storageClient,
+      bucketName
+    )
+
+    val (thumbnales,_) = imageMediaTransformer.transform(frame1path.getFileName.toString,frame1path)
+
+    (Obj(versions.toMap), thumbnales)
   }
 }
