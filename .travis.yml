@@ -18,9 +18,12 @@ cache:
 git:
   submodules: false
 
+addons:
+  apt:
+    packages:
+      - ffmpeg
+
 before_install:
-  - sudo apt-get -qq update
-  - sudo apt-get install -y ffmpeg
   - sed -i 's/git@github.com:/https:\/\/github.com\//' .gitmodules
   - git submodule update --init
 
