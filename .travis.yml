@@ -12,6 +12,7 @@ jdk:
 apt:
   packages:
     - ffmpeg
+    - ffprobe
 
 cache:
   directories:
