@@ -9,6 +9,10 @@ script: $TRAVIS_BUILD_DIR/travis/script/build.sh
 jdk:
   - oraclejdk8
 
+apt:
+  packages:
+    - ffmpeg
+
 cache:
   directories:
   - $HOME/.m2
