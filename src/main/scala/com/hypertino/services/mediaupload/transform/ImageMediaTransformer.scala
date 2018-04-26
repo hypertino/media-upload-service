@@ -17,13 +17,6 @@ class ImageMediaTransformer(transformation: Transformation,
 
   def transform(originalFileName: String, originalPath: Path): (Value, Value) = {
     val originalImage = Image.fromPath(originalPath)
-    val watermarkedImage = transformation.watermark.map { w =>
-      val watermark = Image.fromPath(Paths.get(w.fileName))
-      val coords = w.placement(watermark.width, watermark.height, originalImage.width, originalImage.height)
-      originalImage.overlay(watermark,coords._1, coords._2)
-    } getOrElse {
-      originalImage
-    }
 
     val versions =   transformation.dimensions.map { tr ⇒
       implicit val imageWriter = if (originalFileName.endsWith(".png")) {
@@ -39,7 +32,7 @@ class ImageMediaTransformer(transformation: Transformation,
       val dimensions = s"${newWidth}x$newHeight"
       val newFileName = addSuffix(originalFileName, "-" + dimensions)
 
-      val newImage = transformImage(watermarkedImage, newWidth, newHeight)
+      val newImage = transformImage(originalImage, newWidth, newHeight)
       //val versionUri = config.s3.endpoint + "/" + bucketName + "/" + newFileName
       val stream = newImage.stream(imageWriter)
       val versionUri = try {
@@ -54,16 +47,26 @@ class ImageMediaTransformer(transformation: Transformation,
     (Obj(versions.toMap), Null)
   }
 
+  protected def applyWatermark(originalImage: Image): Image = {
+    transformation.watermark.map { w =>
+      val watermark = Image.fromPath(Paths.get(w.fileName))
+      val coords = w.placement(watermark.width, watermark.height, originalImage.width, originalImage.height)
+      originalImage.overlay(watermark,coords._1, coords._2)
+    } getOrElse {
+      originalImage
+    }
+  }
+
   protected def transformImage(originalImage: Image, newWidth: Int, newHeight: Int): Image = {
     if (originalImage.width == newWidth && originalImage.height == newHeight) {
-      originalImage
+      applyWatermark(originalImage)
     }
     else {
       val originalAspectRatio = originalImage.width.toDouble / originalImage.height.toDouble
       val targetAspectRatio = newWidth.toDouble / newHeight.toDouble
       val eps = 0.00000001
       if (Math.abs(originalAspectRatio - targetAspectRatio) < eps) {
-        originalImage.scaleTo(newWidth, newHeight)
+        applyWatermark(originalImage).scaleTo(newWidth, newHeight)
       }
       else {
         val resized = if (originalAspectRatio > targetAspectRatio) {
@@ -72,7 +75,7 @@ class ImageMediaTransformer(transformation: Transformation,
         else {
           originalImage.resizeTo(originalImage.width, (originalImage.width.toDouble / targetAspectRatio).toInt)
         }
-        resized.scaleTo(newWidth,newHeight)
+        applyWatermark(resized).scaleTo(newWidth,newHeight)
       }
     }
   }
