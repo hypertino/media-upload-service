@@ -75,13 +75,15 @@ case class Watermark(
 
 case class Dimensions(width: Option[Int], height: Option[Int], compression: Option[Int])
 
-case class Transformation(
-                           watermark: Option[Watermark],
-                           dimensions: Seq[Dimensions],
-                           thumbnails: Seq[Dimensions]
-                         )
+trait Transformation {
+  def watermark: Option[Watermark]
+  def dimensions: Seq[Dimensions]
+  def thumbnails: Seq[Dimensions]
+}
 
-case class Scheme(regex: String, transformation: Transformation, bucket: Option[String]) {
+case class Scheme(regex: String, watermark: Option[Watermark],
+                  dimensions: Seq[Dimensions],
+                  thumbnails: Seq[Dimensions], bucket: Option[String]) extends Transformation {
   private lazy val regexPattern = new Regex(regex)
   def matches(uri: String): Boolean = regexPattern.findFirstMatchIn(uri).isDefined
 }
@@ -181,7 +183,7 @@ class MediaUploadService(implicit val injector: Injector) extends Service with I
         }
 
         val originalPath = Paths.get(originalTempFileName)
-        val transformer = new ImageMediaTransformer(scheme.transformation, storageClient, bucketName)
+        val transformer = new ImageMediaTransformer(scheme, storageClient, bucketName)
         transformer.transform(originalFileName, originalPath)
       } getOrElse {
         logger.info(s"Nothing to do with ${media.originalUrl}")

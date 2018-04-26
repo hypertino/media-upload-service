@@ -5,8 +5,7 @@ import java.nio.file.{Files, Path, Paths}
 
 import com.hypertino.binders.value.{Null, Obj, Text, Value}
 import com.hypertino.hyperbus.util.SeqGenerator
-import com.hypertino.mediaupload.api.Media
-import com.hypertino.services.mediaupload.Transformation
+import com.hypertino.services.mediaupload.{Dimensions, Transformation, Watermark}
 import com.hypertino.services.mediaupload.impl.{DimensionsUtil, MimeTypeUtils}
 import com.hypertino.services.mediaupload.storage.StorageClient
 import com.sksamuel.scrimage.Image
@@ -110,7 +109,11 @@ class VideoMediaTransformer(transformation: Transformation,
     }
 
     val imageMediaTransformer = new ImageMediaTransformer(
-      Transformation(transformation.watermark,transformation.thumbnails,Seq.empty),
+      new Transformation {
+        override def watermark: Option[Watermark] = transformation.watermark
+        override def dimensions: Seq[Dimensions] = transformation.thumbnails
+        override def thumbnails: Seq[Dimensions] = Seq.empty
+      },
       storageClient,
       bucketName
     )

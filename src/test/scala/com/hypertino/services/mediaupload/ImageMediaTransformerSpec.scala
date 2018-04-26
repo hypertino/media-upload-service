@@ -20,16 +20,16 @@ class ImageMediaTransformerSpec extends FlatSpec with Matchers {
     val rootPath = "./src/test/resources/image-media-transformer"
     val storageClient = new FileStorageClient(rootPath)
 
-    val watermark = Watermark(rootPath + "/watermark.png", None, None, Some(5), Some(5), percents = true)
+    val w = Watermark(rootPath + "/watermark.png", None, None, Some(5), Some(5), percents = true)
 
-    val transformation = Transformation(
-      Some(watermark),
-      Seq(
+    val transformation = new Transformation {
+      def watermark: Option[Watermark] = Some(w)
+      def dimensions: Seq[Dimensions] = Seq(
         Dimensions(Some(400), Some(300), Some(10)),
         Dimensions(Some(700), Some(600), Some(9))
-      ),
-      Seq.empty
-    )
+      )
+      def thumbnails: Seq[Dimensions] = Seq.empty
+    }
     val imageMediaTransformer = new ImageMediaTransformer(transformation, storageClient, "input")
     val r = imageMediaTransformer.transform("1.jpg",Paths.get(rootPath + "/input/1.jpg"))
     r._1 shouldBe Obj.from(

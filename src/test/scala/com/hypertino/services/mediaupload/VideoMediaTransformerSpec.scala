@@ -19,21 +19,21 @@ class VideoMediaTransformerSpec extends FlatSpec with Matchers {
   "ImageMediaTransformer" should "generate dimensions" in {
     val rootPath = "./src/test/resources/image-media-transformer"
     val storageClient = new FileStorageClient(rootPath)
-    val watermark = Watermark(rootPath + "/watermark.png", None, None, Some(30), Some(30), percents = false)
+    val w = Watermark(rootPath + "/watermark.png", None, None, Some(30), Some(30), percents = false)
 
-    val transformation = Transformation(
-      Some(watermark),
-      Seq(
+    val transformation = new Transformation {
+      def watermark: Option[Watermark] = Some(w)
+      def dimensions: Seq[Dimensions] = Seq(
         Dimensions(Some(400), Some(300), Some(80)),
         Dimensions(Some(700), Some(600), Some(90)),
         Dimensions(Some(1440), Some(1080), Some(90))
-      ),
-      Seq(
+      )
+      def thumbnails: Seq[Dimensions] = Seq(
         Dimensions(Some(400), Some(300), Some(90)),
         Dimensions(Some(700), Some(600), Some(90)),
         Dimensions(Some(1440), Some(1080), Some(80))
       )
-    )
+    }
     val tr = new VideoMediaTransformer(transformation, storageClient, "input")
     val r = tr.transform("3.mp4",Paths.get(rootPath + "/input/3.mp4"))
     r._1 shouldBe Obj.from(
