@@ -44,7 +44,7 @@ case class Watermark(
                       top: Option[Int],
                       right: Option[Int],
                       bottom: Option[Int],
-                      percents: Boolean
+                      percents: Boolean = false
                     ) {
 
   def placement(
