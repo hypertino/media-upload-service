@@ -115,7 +115,7 @@ class VideoMediaTransformer(transformation: Transformation,
 
     val imageMediaTransformer = new ImageMediaTransformer(
       new Transformation {
-        override def watermark: Option[Watermark] = None
+        override def watermark: Option[Watermark] = transformation.watermark
         override def dimensions: Seq[Dimensions] = transformation.thumbnails
         override def thumbnails: Seq[Dimensions] = Seq.empty
       },
