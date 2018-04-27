@@ -21,9 +21,9 @@ import com.hypertino.hyperbus.util.SeqGenerator
 import com.hypertino.mediaupload.api.{Media, MediaFileGet, MediaFilesPost, MediaStatus}
 import com.hypertino.mediaupload.apiref.hyperstorage.{ContentGet, ContentPatch, ContentPut}
 import com.hypertino.service.control.api.Service
-import com.hypertino.services.mediaupload.impl.{DimensionsUtil, MediaIdUtil}
+import com.hypertino.services.mediaupload.impl.{DimensionsUtil, MediaIdUtil, MimeTypeUtils}
 import com.hypertino.services.mediaupload.storage.StorageClient
-import com.hypertino.services.mediaupload.transform.ImageMediaTransformer
+import com.hypertino.services.mediaupload.transform.{ImageMediaTransformer, VideoMediaTransformer}
 import com.hypertino.services.mediaupload.utils.ErrorCode
 import com.sksamuel.scrimage.Image
 import com.sksamuel.scrimage.nio.{JpegWriter, PngWriter}
@@ -183,7 +183,10 @@ class MediaUploadService(implicit val injector: Injector) extends Service with I
         }
 
         val originalPath = Paths.get(originalTempFileName)
-        val transformer = new ImageMediaTransformer(scheme, storageClient, bucketName)
+        val transformer = MimeTypeUtils.probeContentType(originalUrl) match {
+          case Some(s) if s.startsWith("video/") => new VideoMediaTransformer(scheme,storageClient,bucketName)
+          case _ => new ImageMediaTransformer(scheme, storageClient, bucketName)
+        }
         transformer.transform(originalFileName, originalPath)
       } getOrElse {
         logger.info(s"Nothing to do with ${media.originalUrl}")
