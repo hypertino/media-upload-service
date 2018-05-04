@@ -45,9 +45,11 @@ class VideoMediaTransformer(transformation: Transformation,
       }
 
       val coords = w.placement(watermark.width, watermark.height, videoDimensions._1, videoDimensions._2)
+      val watermarkWidth = w.width.getOrElse(watermark.width)
+      val watermarkHeight = w.height.getOrElse(watermark.height)
       builder = builder
         .addInput(w.fileName)
-        .setComplexFilter(s"[1:v][0:v] scale2ref=${watermark.width}:${watermark.height}*sar [wm] [base]; [base][wm] overlay=x=${coords._1}:${coords._2},split=${transformation.dimensions.size}${transformation.dimensions.zipWithIndex.map(i => "[o"+i._2+"]").mkString(" ")}")
+        .setComplexFilter(s"[1:v][0:v] scale2ref=$watermarkWidth:$watermarkHeight*sar [wm] [base]; [base][wm] overlay=x=${coords._1}:${coords._2},split=${transformation.dimensions.size}${transformation.dimensions.zipWithIndex.map(i => "[o"+i._2+"]").mkString(" ")}")
     }
 
     val tempDir = Paths.get(System.getProperty("java.io.tmpdir"), SeqGenerator.create()).toString
@@ -123,8 +125,8 @@ class VideoMediaTransformer(transformation: Transformation,
       bucketName
     )
 
-    val (thumbnales,_) = imageMediaTransformer.transform(frame1path.getFileName.toString,frame1path)
+    val (thumbnails,_) = imageMediaTransformer.transform(frame1path.getFileName.toString,frame1path)
 
-    (Obj(versions.toMap), thumbnales)
+    (Obj(versions.toMap), thumbnails)
   }
 }

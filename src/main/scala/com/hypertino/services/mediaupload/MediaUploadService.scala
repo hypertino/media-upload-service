@@ -44,6 +44,8 @@ case class Watermark(
                       top: Option[Int],
                       right: Option[Int],
                       bottom: Option[Int],
+                      width: Option[Int],
+                      height: Option[Int],
                       percents: Boolean = false
                     ) {
 
