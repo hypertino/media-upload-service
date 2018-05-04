@@ -20,7 +20,7 @@ class ImageMediaTransformerSpec extends FlatSpec with Matchers {
     val rootPath = "./src/test/resources/image-media-transformer"
     val storageClient = new FileStorageClient(rootPath)
 
-    val w = Watermark(rootPath + "/watermark.png", None, None, Some(5), Some(5), percents = true)
+    val w = Watermark(rootPath + "/watermark.png", None, None, Some(5), Some(5), Some(24), Some(24), percents = true)
 
     val transformation = new Transformation {
       def watermark: Option[Watermark] = Some(w)
