@@ -55,7 +55,7 @@ class ImageMediaTransformer(transformation: Transformation,
       } else {
         watermark
       }
-      val coords = w.placement(watermark.width, watermark.height, originalImage.width, originalImage.height)
+      val coords = w.placement(scaledWatermark.width, scaledWatermark.height, originalImage.width, originalImage.height)
       originalImage.overlay(scaledWatermark, coords._1, coords._2)
     } getOrElse {
       originalImage
