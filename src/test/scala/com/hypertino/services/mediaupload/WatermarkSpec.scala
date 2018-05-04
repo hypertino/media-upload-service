@@ -11,22 +11,22 @@ import org.scalatest.{FlatSpec, Matchers}
 
 class WatermarkSpec extends FlatSpec with Matchers {
   "Watermark" should "place in absolute pixels (right-bottom)" in {
-    val watermark = Watermark("1.png", None, None, Some(5), Some(5), percents = false)
+    val watermark = Watermark("1.png", None, None, Some(5), Some(5), None, None, percents = false)
     watermark.placement(10, 8, 200, 200) shouldBe (185,187)
   }
 
   it should "place in absolute pixels (left-top)" in {
-    val watermark = Watermark("1.png", Some(5), Some(5), None, None, percents = false)
+    val watermark = Watermark("1.png", Some(5), Some(5), None, None, None, None, percents = false)
     watermark.placement(10, 8, 200, 200) shouldBe (5,5)
   }
 
   it should "place in percents (right-bottom)" in {
-    val watermark = Watermark("1.png", None, None, Some(5), Some(5), percents = true)
+    val watermark = Watermark("1.png", None, None, Some(5), Some(5), None, None, percents = true)
     watermark.placement(10, 8, 200, 200) shouldBe (180,182)
   }
 
   it should "place in percents (left-top)" in {
-    val watermark = Watermark("1.png", Some(5), Some(5), None, None, percents = true)
+    val watermark = Watermark("1.png", Some(5), Some(5), None, None, None, None, percents = true)
     watermark.placement(10, 8, 200, 200) shouldBe (10,10)
   }
 }
