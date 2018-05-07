@@ -38,8 +38,7 @@ class VideoMediaTransformer(transformation: Transformation,
     builder.setInput(probe)
 
     transformation.watermark.foreach { w =>
-      val watermarkPath = Paths.get(w.fileName).toAbsolutePath
-      val watermark = Image.fromPath(watermarkPath)
+      val watermark = Image.fromPath(Paths.get(w.fileName))
       val videoDimensions = videoStream.tags.asScala.get("rotate") match {
         case Some("90") | Some("180") => (videoStream.height, videoStream.width)
         case _ => (videoStream.width, videoStream.height)
@@ -49,7 +48,7 @@ class VideoMediaTransformer(transformation: Transformation,
       val watermarkHeight = w.height.getOrElse(watermark.height)
       val coords = w.placement(watermarkWidth, watermarkHeight, videoDimensions._1, videoDimensions._2)
       builder = builder
-        .addInput(watermarkPath.toString)
+        .addInput(w.fileName)
         .setComplexFilter(s"[1:v][0:v] scale2ref=$watermarkWidth:$watermarkHeight*sar [wm] [base]; [base][wm] overlay=x=${coords._1}:${coords._2},split=${transformation.dimensions.size}${transformation.dimensions.zipWithIndex.map(i => "[o"+i._2+"]").mkString(" ")}")
     }
 
