@@ -49,7 +49,8 @@ class ImageMediaTransformer(transformation: Transformation,
 
   protected def applyWatermark(originalImage: Image): Image = {
     transformation.watermark.map { w =>
-      val watermark = Image.fromPath(Paths.get(w.fileName))
+      val watermarkPath = Paths.get(w.fileName).toAbsolutePath
+      val watermark = Image.fromPath(watermarkPath)
       val scaledWatermark = if (w.height.isDefined || w.width.isDefined) {
         watermark.scaleTo(w.width.getOrElse(watermark.width), w.height.getOrElse(watermark.height))
       } else {
