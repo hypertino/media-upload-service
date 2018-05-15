@@ -20,9 +20,19 @@ class WatermarkSpec extends FlatSpec with Matchers {
     watermark.placement(10, 8, 200, 200) shouldBe (5,5,10,8)
   }
 
+  it should "place in absolute pixels (left-top) symmetrical" in {
+    val watermark = Watermark("1.png", Some(5), Some(-1), None, None, None, None, percents = false)
+    watermark.placement(10, 8, 200, 100) shouldBe (5,5,10,8)
+  }
+
   it should "place in percents (right-bottom)" in {
     val watermark = Watermark("1.png", None, None, Some(5), Some(5), None, None, percents = true)
     watermark.placement(10, 8, 200, 200) shouldBe (180,182,10,8)
+  }
+
+  it should "place in percents (right-bottom) symmetrical" in {
+    val watermark = Watermark("1.png", None, None, Some(5), Some(-1), None, None, percents = true)
+    watermark.placement(10, 8, 200, 100) shouldBe (180,82,10,8)
   }
 
   it should "place in percents (right-bottom) and scale according to width" in {

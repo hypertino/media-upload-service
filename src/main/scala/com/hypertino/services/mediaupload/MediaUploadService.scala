@@ -54,10 +54,15 @@ case class Watermark(
                  mediaWidth: Int, mediaHeight: Int
                ): (Int, Int, Int, Int) = {
 
-    val l = left.map(p(mediaWidth, _))
-    val r = right.map(p(mediaWidth, _))
-    val t = top.map(p(mediaHeight, _))
-    val b = bottom.map(p(mediaHeight, _))
+    val la = left.map(p(mediaWidth, _))
+    val ra = right.map(p(mediaWidth, _))
+    val ta = top.map(p(mediaHeight, _))
+    val ba = bottom.map(p(mediaHeight, _))
+
+    val l = la.map(x => if (x < 0) ta.getOrElse(ba.getOrElse(x)) else x)
+    val r = ra.map(x => if (x < 0) ba.getOrElse(ta.getOrElse(x)) else x)
+    val t = ta.map(x => if (x < 0) la.getOrElse(ra.getOrElse(x)) else x)
+    val b = ba.map(x => if (x < 0) ra.getOrElse(la.getOrElse(x)) else x)
 
     val watermarkRatio = watermarkWidth.toDouble/watermarkHeight
     val w = width.map(p(mediaWidth, _))
