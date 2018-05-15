@@ -44,9 +44,7 @@ class VideoMediaTransformer(transformation: Transformation,
         case _ => (videoStream.width, videoStream.height)
       }
 
-      val watermarkWidth = w.width.getOrElse(watermark.width)
-      val watermarkHeight = w.height.getOrElse(watermark.height)
-      val coords = w.placement(watermarkWidth, watermarkHeight, videoDimensions._1, videoDimensions._2)
+      val coords = w.placement(watermark.width, watermark.height, videoDimensions._1, videoDimensions._2)
       builder = builder
         .addInput(w.fileName)
         .setComplexFilter(s"[1:v][0:v] scale2ref=${coords._3}:${coords._4}*sar [wm] [base]; [base][wm] overlay=x=${coords._1}:${coords._2},split=${transformation.dimensions.size}${transformation.dimensions.zipWithIndex.map(i => "[o"+i._2+"]").mkString(" ")}")
