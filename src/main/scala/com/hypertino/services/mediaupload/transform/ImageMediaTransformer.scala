@@ -50,12 +50,12 @@ class ImageMediaTransformer(transformation: Transformation,
   protected def applyWatermark(originalImage: Image): Image = {
     transformation.watermark.map { w =>
       val watermark = Image.fromPath(Paths.get(w.fileName))
+      val coords = w.placement(watermark.width, watermark.height, originalImage.width, originalImage.height)
       val scaledWatermark = if (w.height.isDefined || w.width.isDefined) {
-        watermark.scaleTo(w.width.getOrElse(watermark.width), w.height.getOrElse(watermark.height))
+        watermark.scaleTo(coords._3, coords._4)
       } else {
         watermark
       }
-      val coords = w.placement(scaledWatermark.width, scaledWatermark.height, originalImage.width, originalImage.height)
       originalImage.overlay(scaledWatermark, coords._1, coords._2)
     } getOrElse {
       originalImage

@@ -52,20 +52,41 @@ case class Watermark(
   def placement(
                  watermarkWidth: Int, watermarkHeight: Int,
                  mediaWidth: Int, mediaHeight: Int
-               ): (Int, Int) = {
+               ): (Int, Int, Int, Int) = {
 
     val l = left.map(p(mediaWidth, _))
     val r = right.map(p(mediaWidth, _))
     val t = top.map(p(mediaHeight, _))
     val b = bottom.map(p(mediaHeight, _))
 
+    val watermarkRatio = watermarkWidth.toDouble/watermarkHeight
+    val w = width.map(p(mediaWidth, _))
+    val h = height.map(p(mediaHeight, _))
+
+    val wFinal = w.getOrElse {
+      if (h.isDefined) {
+        (h.get * watermarkRatio).toInt
+      } else {
+        watermarkWidth
+      }
+    }
+
+    val hFinal = h.getOrElse {
+      if (w.isDefined) {
+        (w.get / watermarkRatio).toInt
+      }
+      else {
+        watermarkHeight
+      }
+    }
+
     val x = l.getOrElse {
-      r.map(rx => mediaWidth-rx-watermarkWidth).getOrElse(mediaWidth/2-watermarkWidth/2)
+      r.map(rx => mediaWidth-rx-wFinal).getOrElse(mediaWidth/2-watermarkWidth/2)
     }
     val y = t.getOrElse {
-      b.map(ry => mediaHeight-ry-watermarkHeight).getOrElse(mediaHeight/2-watermarkHeight/2)
+      b.map(ry => mediaHeight-ry-hFinal).getOrElse(mediaHeight/2-watermarkHeight/2)
     }
-    (x,y)
+    (x,y,wFinal,hFinal)
   }
 
   private def p(all: Int, v: Int): Int = if (percents) {

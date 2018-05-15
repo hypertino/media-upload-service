@@ -49,7 +49,7 @@ class VideoMediaTransformer(transformation: Transformation,
       val coords = w.placement(watermarkWidth, watermarkHeight, videoDimensions._1, videoDimensions._2)
       builder = builder
         .addInput(w.fileName)
-        .setComplexFilter(s"[1:v][0:v] scale2ref=$watermarkWidth:$watermarkHeight*sar [wm] [base]; [base][wm] overlay=x=${coords._1}:${coords._2},split=${transformation.dimensions.size}${transformation.dimensions.zipWithIndex.map(i => "[o"+i._2+"]").mkString(" ")}")
+        .setComplexFilter(s"[1:v][0:v] scale2ref=${coords._3}:${coords._4}*sar [wm] [base]; [base][wm] overlay=x=${coords._1}:${coords._2},split=${transformation.dimensions.size}${transformation.dimensions.zipWithIndex.map(i => "[o"+i._2+"]").mkString(" ")}")
     }
 
     val tempDir = Paths.get(System.getProperty("java.io.tmpdir"), SeqGenerator.create()).toString
