@@ -15,7 +15,7 @@ class ImageMediaTransformer(transformation: Transformation,
                             storageClient: StorageClient,
                             bucketName: String) extends MediaTransformer with StrictLogging {
 
-  def transform(originalFileName: String, originalPath: Path): (Value, Value) = {
+  def transform(originalFileName: String, originalPath: Path): (Value, Value, Option[String]) = {
     val originalImage = Image.fromPath(originalPath)
 
     val versions =   transformation.dimensions.map { tr ⇒
@@ -44,7 +44,7 @@ class ImageMediaTransformer(transformation: Transformation,
 
       dimensions → Text(versionUri)
     }
-    (Obj(versions.toMap), Null)
+    (Obj(versions.toMap), Null, None)
   }
 
   protected def applyWatermark(originalImage: Image): Image = {

@@ -143,7 +143,7 @@ class MediaUploadService(implicit val injector: Injector) extends Service with I
   def onMediaFilesPost(implicit post: MediaFilesPost): Task[Created[Media]] = {
     import com.hypertino.binders.value._
     val mediaId = MediaIdUtil.mediaId(post.body.originalUrl)
-    val media = Media(mediaId, rewrite(post.body.originalUrl), Null, Null, MediaStatus.PROGRESS)
+    val media = Media(mediaId, rewrite(post.body.originalUrl), None, Null, Null, MediaStatus.PROGRESS)
     val path = hyperStorageMediaPath(mediaId)
 
     hyperbus
@@ -151,8 +151,8 @@ class MediaUploadService(implicit val injector: Injector) extends Service with I
       .flatMap { _ ⇒
         transform(media)
       }
-      .map { case (versions, thumbnails) ⇒
-        media.copy(versions = versions, thumbnails = thumbnails, status = MediaStatus.NORMAL)
+      .map { case (versions, thumbnails, frame0) ⇒
+        media.copy(versions = versions, thumbnails = thumbnails, originalFrame0Url=frame0, status = MediaStatus.NORMAL)
       }
       .onErrorRecover {
         case NonFatal(e) ⇒
@@ -183,7 +183,7 @@ class MediaUploadService(implicit val injector: Injector) extends Service with I
       }
   }
 
-  protected def transform(media: Media): Task[(Value, Value)] = Task.eval {
+  protected def transform(media: Media): Task[(Value, Value, Option[String])] = Task.eval {
     scala.concurrent.blocking {
       config.schemes.find(_.matches(media.originalUrl)).map { scheme ⇒
         logger.info(s"Transforming ${media.originalUrl} according to $scheme")
@@ -218,7 +218,7 @@ class MediaUploadService(implicit val injector: Injector) extends Service with I
         transformer.transform(originalFileName, originalPath)
       } getOrElse {
         logger.info(s"Nothing to do with ${media.originalUrl}")
-        (Null, Null)
+        (Null, Null, None)
       }
     }
   }

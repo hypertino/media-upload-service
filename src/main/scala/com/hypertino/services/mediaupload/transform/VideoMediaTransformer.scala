@@ -23,7 +23,7 @@ class VideoMediaTransformer(transformation: Transformation,
                             defaultAudioCodec: String = "aac"
                            ) extends MediaTransformer with StrictLogging {
 
-  def transform(originalFileName: String, originalPath: Path): (Value, Value) = {
+  def transform(originalFileName: String, originalPath: Path): (Value, Value, Option[String]) = {
     import scala.collection.JavaConverters._
     val ffprobe = new FFprobe()
     val probe = ffprobe.probe(originalPath.toString)
@@ -123,8 +123,27 @@ class VideoMediaTransformer(transformation: Transformation,
       bucketName
     )
 
-    val (thumbnails,_) = imageMediaTransformer.transform(frame1path.getFileName.toString,frame1path)
+    val (thumbnails,_,_) = imageMediaTransformer.transform(frame1path.getFileName.toString,frame1path)
+    val frame1file = frame1path.toFile
+    frame1file.deleteOnExit()
+    val frame1uri = {
+      val stream = new FileInputStream(frame1file)
+      val newFileName = frame1path.getFileName.toString
+      try {
+        logger.info(s"Uploading $bucketName/$newFileName")
+        storageClient.upload(bucketName, newFileName, stream, MimeTypeUtils.probeContentType(originalFileName))
+      } finally {
+        stream.close()
+        try {
+          frame1file.delete()
+        }
+        catch {
+          case e: Throwable =>
+            logger.warn(s"Can't delete file $frame1path", e)
+        }
+      }
+    }
 
-    (Obj(versions.toMap), thumbnails)
+    (Obj(versions.toMap), thumbnails, Some(frame1uri))
   }
 }
