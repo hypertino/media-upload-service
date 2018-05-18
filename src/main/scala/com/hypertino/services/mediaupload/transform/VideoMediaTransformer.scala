@@ -131,7 +131,7 @@ class VideoMediaTransformer(transformation: Transformation,
       val newFileName = frame1path.getFileName.toString
       try {
         logger.info(s"Uploading $bucketName/$newFileName")
-        storageClient.upload(bucketName, newFileName, stream, MimeTypeUtils.probeContentType(originalFileName))
+        storageClient.upload(bucketName, newFileName, stream, MimeTypeUtils.probeContentType(frame1file.toString))
       } finally {
         stream.close()
         try {
