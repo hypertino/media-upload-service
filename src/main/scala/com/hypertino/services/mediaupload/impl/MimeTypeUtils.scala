@@ -16,6 +16,11 @@ object MimeTypeUtils {
       case ".jpg" | ".jpeg" ⇒ Some("image/jpeg")
       case ".png" ⇒ Some("image/png")
       case  ".mp4" ⇒ Some("video/mp4")
+      case  ".mov" ⇒ Some("video/quicktime")
+      case  ".avi" ⇒ Some("video/x-msvideo")
+      case  ".wmv" ⇒ Some("video/x-ms-wmv")
+      case  ".mpeg" ⇒ Some("video/mpeg")
+      case  ".ts" ⇒ Some("video/MP2T")
       case  _ ⇒ None
     }
   }
