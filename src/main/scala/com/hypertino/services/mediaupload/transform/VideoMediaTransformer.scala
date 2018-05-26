@@ -36,19 +36,40 @@ class VideoMediaTransformer(transformation: Transformation,
 
     var builder = new FFmpegBuilder()
     builder.setInput(probe)
+    val videoDimensions = videoStream.tags.asScala.get("rotate") match {
+      case Some("90") | Some("180") => (videoStream.height, videoStream.width)
+      case _ => (videoStream.width, videoStream.height)
+    }
+    val dimCoeff = 100
+    val originalAspectRatio = videoDimensions._1 * dimCoeff / videoDimensions._2
+    val complexSb = new StringBuilder
 
-    transformation.watermark.foreach { w =>
-      val watermark = Image.fromPath(Paths.get(w.fileName))
-      val videoDimensions = videoStream.tags.asScala.get("rotate") match {
-        case Some("90") | Some("180") => (videoStream.height, videoStream.width)
-        case _ => (videoStream.width, videoStream.height)
+    transformation.dimensions.zipWithIndex.map { case (dimensions, i) =>
+      val dimSize = DimensionsUtil.getNewDimensions(videoDimensions._1, videoDimensions._2, dimensions.width, dimensions.height)
+      val dimAspectRatio = dimSize._1 * dimCoeff / dimSize._2;
+      val cropS = if (dimAspectRatio > originalAspectRatio) {
+        s"crop=${videoDimensions._1}:${(videoDimensions._1*dimCoeff)/dimAspectRatio},"
+      } else if (dimAspectRatio < originalAspectRatio) {
+        s"crop=${(videoDimensions._2*dimAspectRatio)/dimCoeff}:${videoDimensions._2},"
+      } else {
+        ""
       }
 
-      val coords = w.placement(watermark.width, watermark.height, videoDimensions._1, videoDimensions._2)
-      builder = builder
-        .addInput(w.fileName)
-        .setComplexFilter(s"[1:v][0:v] scale2ref=${coords._3}:${coords._4}*sar [wm] [base]; [base][wm] overlay=x=${coords._1}:${coords._2},split=${transformation.dimensions.size}${transformation.dimensions.zipWithIndex.map(i => "[o"+i._2+"]").mkString(" ")}")
+      complexSb.append(s"[0]${cropS}scale=${dimSize._1}:${dimSize._2}")
+      complexSb.append(transformation.watermark match {
+        case Some(w) =>
+          val watermark = Image.fromPath(Paths.get(w.fileName))
+          val coords = w.placement(watermark.width, watermark.height, dimSize._1, dimSize._2)
+          s"[v$i];[1]scale=${coords._3}:${coords._4}[w$i];[v$i][w$i]overlay=${coords._1}:${coords._2}[o$i]"
+        case None =>
+          s"[o$i]"
+      })
     }
+
+    transformation.watermark.foreach { w =>
+      builder.addInput(w.fileName)
+    }
+    builder.setComplexFilter(complexSb.toString)
 
     val tempDir = Paths.get(System.getProperty("java.io.tmpdir"), SeqGenerator.create()).toString
     val files = transformation.dimensions.zipWithIndex.map { case (tr, index) ⇒
@@ -72,14 +93,13 @@ class VideoMediaTransformer(transformation: Transformation,
       output
         .setVideoCodec(defaultVideoCodec)
         .setAudioCodec(defaultAudioCodec)
-        .setVideoWidth(newWidth)
-        .setVideoHeight(newHeight)
 
       tr.compression.foreach {c =>
         val q = 1 + Math.min(Math.max((100 - c) * 30 / 100, 0), 30)
         output = output
           .setVideoQuality(q)
           .setAudioQuality(q)
+          .setVideoMovFlags("+faststart")
       }
 
       builder = output.done()
@@ -91,7 +111,7 @@ class VideoMediaTransformer(transformation: Transformation,
       .setVideoQuality(1)
       .setFrames(1)
       .done()
-    // todo: convert thumbnail from sample to display ration
+
     val executor = new FFmpegExecutor()
     executor.createJob(builder).run()
     val versions = files.map { v =>

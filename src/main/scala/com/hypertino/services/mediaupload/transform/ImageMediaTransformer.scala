@@ -71,7 +71,7 @@ class ImageMediaTransformer(transformation: Transformation,
       val targetAspectRatio = newWidth.toDouble / newHeight.toDouble
       val eps = 0.00000001
       if (Math.abs(originalAspectRatio - targetAspectRatio) < eps) {
-        applyWatermark(originalImage).scaleTo(newWidth, newHeight)
+        applyWatermark(originalImage.scaleTo(newWidth, newHeight))
       }
       else {
         val resized = if (originalAspectRatio > targetAspectRatio) {
@@ -80,7 +80,7 @@ class ImageMediaTransformer(transformation: Transformation,
         else {
           originalImage.resizeTo(originalImage.width, (originalImage.width.toDouble / targetAspectRatio).toInt)
         }
-        applyWatermark(resized).scaleTo(newWidth,newHeight)
+        applyWatermark(resized.scaleTo(newWidth,newHeight))
       }
     }
   }
