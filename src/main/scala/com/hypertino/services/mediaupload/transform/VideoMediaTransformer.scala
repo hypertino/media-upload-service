@@ -42,29 +42,28 @@ class VideoMediaTransformer(transformation: Transformation,
     }
     val dimCoeff = 100
     val originalAspectRatio = videoDimensions._1 * dimCoeff / videoDimensions._2
-    val complexSb = new StringBuilder
-
-    transformation.dimensions.zipWithIndex.map { case (dimensions, i) =>
+    val complexSb = transformation.dimensions.zipWithIndex.map { case (dimensions, i) =>
       val dimSize = DimensionsUtil.getNewDimensions(videoDimensions._1, videoDimensions._2, dimensions.width, dimensions.height)
       val dimAspectRatio = dimSize._1 * dimCoeff / dimSize._2;
       val cropS = if (dimAspectRatio > originalAspectRatio) {
-        s"crop=${videoDimensions._1}:${(videoDimensions._1*dimCoeff)/dimAspectRatio},"
+        s"crop=${videoDimensions._1}:${(videoDimensions._1 * dimCoeff) / dimAspectRatio},"
       } else if (dimAspectRatio < originalAspectRatio) {
-        s"crop=${(videoDimensions._2*dimAspectRatio)/dimCoeff}:${videoDimensions._2},"
+        s"crop=${(videoDimensions._2 * dimAspectRatio) / dimCoeff}:${videoDimensions._2},"
       } else {
         ""
       }
 
-      complexSb.append(s"[0]${cropS}scale=${dimSize._1}:${dimSize._2}")
-      complexSb.append(transformation.watermark match {
-        case Some(w) =>
-          val watermark = Image.fromPath(Paths.get(w.fileName))
-          val coords = w.placement(watermark.width, watermark.height, dimSize._1, dimSize._2)
-          s"[v$i];[1]scale=${coords._3}:${coords._4}[w$i];[v$i][w$i]overlay=${coords._1}:${coords._2}[o$i]"
-        case None =>
-          s"[o$i]"
-      })
-    }
+      s"[0]${cropS}scale=${dimSize._1}:${dimSize._2}" + {
+        transformation.watermark match {
+          case Some(w) =>
+            val watermark = Image.fromPath(Paths.get(w.fileName))
+            val coords = w.placement(watermark.width, watermark.height, dimSize._1, dimSize._2)
+            s"[v$i];[1]scale=${coords._3}:${coords._4}[w$i];[v$i][w$i]overlay=${coords._1}:${coords._2}[o$i]"
+          case None =>
+            s"[o$i]"
+        }
+      }
+    } mkString(";")
 
     transformation.watermark.foreach { w =>
       builder.addInput(w.fileName)
